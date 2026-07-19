@@ -28,7 +28,7 @@ async function analyzeVideo(sb: Sb, userId: string, runId: string, url: string, 
       content: [
         { type: "text", text: `Analyze this short-form video (frames sampled below). Return STRICT JSON only, no prose, matching this shape:
 {"summary":string,"objects":string[],"people":string,"scene":string,"actions":string[],"emotions":string[],"topic":string,"story":string,"message":string}` },
-        ...frames.map((u) => ({ type: "image_url" as const, image_url: { url: u } })),
+        ...frames.map((u) => ({ type: "image" as const, image: u })),
       ],
     }],
   });
@@ -119,12 +119,16 @@ Analytics: ${JSON.stringify(analytics ?? {})}`,
 }
 
 async function generateCaption(sb: Sb, userId: string, apiKey: string, videoSummary: any) {
-  const [{ data: ai }, { data: analysisSet }, { data: memory }, { data: prevCaps }] = await Promise.all([
+  const [aiRes, analysisRes, memoryRes] = await Promise.all([
     sb.from("ai_settings").select("*").eq("user_id", userId).maybeSingle(),
     sb.from("analysis_settings").select("*").eq("user_id", userId).maybeSingle(),
     sb.from("memory_insights").select("category,insight,confidence").eq("user_id", userId).eq("active", true).order("confidence", { ascending: false }).limit(15),
-    sb.from("captions").select("text,hashtags").order("created_at", { ascending: false }).limit(analysisSet?.n_value ?? 5),
   ]);
+  const ai = aiRes.data;
+  const analysisSet = analysisRes.data;
+  const memory = memoryRes.data;
+  const { data: prevCaps } = await sb.from("captions").select("text,hashtags").order("created_at", { ascending: false }).limit(analysisSet?.n_value ?? 5);
+
 
   const objective = ai?.objective === "custom" ? (ai?.custom_objective ?? "engagement") : (ai?.objective ?? "engagement");
   const provider = createAiGateway(apiKey);
