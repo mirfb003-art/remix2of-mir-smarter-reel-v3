@@ -16,6 +16,12 @@ import { Route as AuthenticatedSheetRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedQueueRouteImport } from './routes/_authenticated/queue'
 import { Route as AuthenticatedLearningRouteImport } from './routes/_authenticated/learning'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
+import { Route as AuthenticatedSettingsSchedulerRouteImport } from './routes/_authenticated/settings/scheduler'
+import { Route as AuthenticatedSettingsGeneralRouteImport } from './routes/_authenticated/settings/general'
+import { Route as AuthenticatedSettingsBufferRouteImport } from './routes/_authenticated/settings/buffer'
+import { Route as AuthenticatedSettingsAnalysisRouteImport } from './routes/_authenticated/settings/analysis'
+import { Route as AuthenticatedSettingsAiRouteImport } from './routes/_authenticated/settings/ai'
 import { Route as ApiPublicCronTickRouteImport } from './routes/api/public/cron/tick'
 
 const AuthRoute = AuthRouteImport.update({
@@ -52,6 +58,41 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSettingsIndexRoute =
+  AuthenticatedSettingsIndexRouteImport.update({
+    id: '/settings/',
+    path: '/settings/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSettingsSchedulerRoute =
+  AuthenticatedSettingsSchedulerRouteImport.update({
+    id: '/settings/scheduler',
+    path: '/settings/scheduler',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSettingsGeneralRoute =
+  AuthenticatedSettingsGeneralRouteImport.update({
+    id: '/settings/general',
+    path: '/settings/general',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSettingsBufferRoute =
+  AuthenticatedSettingsBufferRouteImport.update({
+    id: '/settings/buffer',
+    path: '/settings/buffer',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSettingsAnalysisRoute =
+  AuthenticatedSettingsAnalysisRouteImport.update({
+    id: '/settings/analysis',
+    path: '/settings/analysis',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSettingsAiRoute = AuthenticatedSettingsAiRouteImport.update({
+  id: '/settings/ai',
+  path: '/settings/ai',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const ApiPublicCronTickRoute = ApiPublicCronTickRouteImport.update({
   id: '/api/public/cron/tick',
   path: '/api/public/cron/tick',
@@ -65,6 +106,12 @@ export interface FileRoutesByFullPath {
   '/learning': typeof AuthenticatedLearningRoute
   '/queue': typeof AuthenticatedQueueRoute
   '/sheet': typeof AuthenticatedSheetRoute
+  '/settings/ai': typeof AuthenticatedSettingsAiRoute
+  '/settings/analysis': typeof AuthenticatedSettingsAnalysisRoute
+  '/settings/buffer': typeof AuthenticatedSettingsBufferRoute
+  '/settings/general': typeof AuthenticatedSettingsGeneralRoute
+  '/settings/scheduler': typeof AuthenticatedSettingsSchedulerRoute
+  '/settings/': typeof AuthenticatedSettingsIndexRoute
   '/api/public/cron/tick': typeof ApiPublicCronTickRoute
 }
 export interface FileRoutesByTo {
@@ -74,6 +121,12 @@ export interface FileRoutesByTo {
   '/learning': typeof AuthenticatedLearningRoute
   '/queue': typeof AuthenticatedQueueRoute
   '/sheet': typeof AuthenticatedSheetRoute
+  '/settings/ai': typeof AuthenticatedSettingsAiRoute
+  '/settings/analysis': typeof AuthenticatedSettingsAnalysisRoute
+  '/settings/buffer': typeof AuthenticatedSettingsBufferRoute
+  '/settings/general': typeof AuthenticatedSettingsGeneralRoute
+  '/settings/scheduler': typeof AuthenticatedSettingsSchedulerRoute
+  '/settings': typeof AuthenticatedSettingsIndexRoute
   '/api/public/cron/tick': typeof ApiPublicCronTickRoute
 }
 export interface FileRoutesById {
@@ -85,6 +138,12 @@ export interface FileRoutesById {
   '/_authenticated/learning': typeof AuthenticatedLearningRoute
   '/_authenticated/queue': typeof AuthenticatedQueueRoute
   '/_authenticated/sheet': typeof AuthenticatedSheetRoute
+  '/_authenticated/settings/ai': typeof AuthenticatedSettingsAiRoute
+  '/_authenticated/settings/analysis': typeof AuthenticatedSettingsAnalysisRoute
+  '/_authenticated/settings/buffer': typeof AuthenticatedSettingsBufferRoute
+  '/_authenticated/settings/general': typeof AuthenticatedSettingsGeneralRoute
+  '/_authenticated/settings/scheduler': typeof AuthenticatedSettingsSchedulerRoute
+  '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
   '/api/public/cron/tick': typeof ApiPublicCronTickRoute
 }
 export interface FileRouteTypes {
@@ -96,6 +155,12 @@ export interface FileRouteTypes {
     | '/learning'
     | '/queue'
     | '/sheet'
+    | '/settings/ai'
+    | '/settings/analysis'
+    | '/settings/buffer'
+    | '/settings/general'
+    | '/settings/scheduler'
+    | '/settings/'
     | '/api/public/cron/tick'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -105,6 +170,12 @@ export interface FileRouteTypes {
     | '/learning'
     | '/queue'
     | '/sheet'
+    | '/settings/ai'
+    | '/settings/analysis'
+    | '/settings/buffer'
+    | '/settings/general'
+    | '/settings/scheduler'
+    | '/settings'
     | '/api/public/cron/tick'
   id:
     | '__root__'
@@ -115,6 +186,12 @@ export interface FileRouteTypes {
     | '/_authenticated/learning'
     | '/_authenticated/queue'
     | '/_authenticated/sheet'
+    | '/_authenticated/settings/ai'
+    | '/_authenticated/settings/analysis'
+    | '/_authenticated/settings/buffer'
+    | '/_authenticated/settings/general'
+    | '/_authenticated/settings/scheduler'
+    | '/_authenticated/settings/'
     | '/api/public/cron/tick'
   fileRoutesById: FileRoutesById
 }
@@ -176,6 +253,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/settings/': {
+      id: '/_authenticated/settings/'
+      path: '/settings'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/settings/scheduler': {
+      id: '/_authenticated/settings/scheduler'
+      path: '/settings/scheduler'
+      fullPath: '/settings/scheduler'
+      preLoaderRoute: typeof AuthenticatedSettingsSchedulerRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/settings/general': {
+      id: '/_authenticated/settings/general'
+      path: '/settings/general'
+      fullPath: '/settings/general'
+      preLoaderRoute: typeof AuthenticatedSettingsGeneralRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/settings/buffer': {
+      id: '/_authenticated/settings/buffer'
+      path: '/settings/buffer'
+      fullPath: '/settings/buffer'
+      preLoaderRoute: typeof AuthenticatedSettingsBufferRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/settings/analysis': {
+      id: '/_authenticated/settings/analysis'
+      path: '/settings/analysis'
+      fullPath: '/settings/analysis'
+      preLoaderRoute: typeof AuthenticatedSettingsAnalysisRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/settings/ai': {
+      id: '/_authenticated/settings/ai'
+      path: '/settings/ai'
+      fullPath: '/settings/ai'
+      preLoaderRoute: typeof AuthenticatedSettingsAiRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/api/public/cron/tick': {
       id: '/api/public/cron/tick'
       path: '/api/public/cron/tick'
@@ -191,6 +310,12 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedLearningRoute: typeof AuthenticatedLearningRoute
   AuthenticatedQueueRoute: typeof AuthenticatedQueueRoute
   AuthenticatedSheetRoute: typeof AuthenticatedSheetRoute
+  AuthenticatedSettingsAiRoute: typeof AuthenticatedSettingsAiRoute
+  AuthenticatedSettingsAnalysisRoute: typeof AuthenticatedSettingsAnalysisRoute
+  AuthenticatedSettingsBufferRoute: typeof AuthenticatedSettingsBufferRoute
+  AuthenticatedSettingsGeneralRoute: typeof AuthenticatedSettingsGeneralRoute
+  AuthenticatedSettingsSchedulerRoute: typeof AuthenticatedSettingsSchedulerRoute
+  AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -198,6 +323,12 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedLearningRoute: AuthenticatedLearningRoute,
   AuthenticatedQueueRoute: AuthenticatedQueueRoute,
   AuthenticatedSheetRoute: AuthenticatedSheetRoute,
+  AuthenticatedSettingsAiRoute: AuthenticatedSettingsAiRoute,
+  AuthenticatedSettingsAnalysisRoute: AuthenticatedSettingsAnalysisRoute,
+  AuthenticatedSettingsBufferRoute: AuthenticatedSettingsBufferRoute,
+  AuthenticatedSettingsGeneralRoute: AuthenticatedSettingsGeneralRoute,
+  AuthenticatedSettingsSchedulerRoute: AuthenticatedSettingsSchedulerRoute,
+  AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

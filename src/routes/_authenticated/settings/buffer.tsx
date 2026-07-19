@@ -45,7 +45,7 @@ function BufferSettings() {
   const delMut = useMutation({ mutationFn: (id: string) => del({ data: { id } }), onSuccess: () => qc.invalidateQueries({ queryKey: ["buffer-creds"] }) });
   const testMut = useMutation({
     mutationFn: (id: string) => test({ data: { id } }),
-    onSuccess: (r) => { r.ok ? toast.success("Connected") : toast.error(r.error ?? "Failed"); qc.invalidateQueries({ queryKey: ["buffer-creds"] }); },
+    onSuccess: (r) => { r.ok ? toast.success("Connected") : toast.error(r.message ?? "Failed"); qc.invalidateQueries({ queryKey: ["buffer-creds"] }); },
   });
   const chanMut = useMutation({
     mutationFn: () => saveChan({ data: { name: chName, platform: chPlatform, buffer_channel_id: chBufferId, credential_id: chCredId || null, active: true } }),
