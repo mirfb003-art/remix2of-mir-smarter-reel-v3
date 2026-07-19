@@ -14,7 +14,756 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      ai_settings: {
+        Row: {
+          brand_tone: string
+          created_at: string
+          custom_objective: string | null
+          default_hashtags: string[]
+          id: string
+          language: string
+          max_caption_length: number
+          model: string
+          objective: Database["public"]["Enums"]["channel_objective"]
+          platform_rules: Json
+          temperature: number
+          updated_at: string
+          user_id: string
+          user_instructions: string | null
+        }
+        Insert: {
+          brand_tone?: string
+          created_at?: string
+          custom_objective?: string | null
+          default_hashtags?: string[]
+          id?: string
+          language?: string
+          max_caption_length?: number
+          model?: string
+          objective?: Database["public"]["Enums"]["channel_objective"]
+          platform_rules?: Json
+          temperature?: number
+          updated_at?: string
+          user_id: string
+          user_instructions?: string | null
+        }
+        Update: {
+          brand_tone?: string
+          created_at?: string
+          custom_objective?: string | null
+          default_hashtags?: string[]
+          id?: string
+          language?: string
+          max_caption_length?: number
+          model?: string
+          objective?: Database["public"]["Enums"]["channel_objective"]
+          platform_rules?: Json
+          temperature?: number
+          updated_at?: string
+          user_id?: string
+          user_instructions?: string | null
+        }
+        Relationships: []
+      }
+      analysis_settings: {
+        Row: {
+          created_at: string
+          custom_query: string | null
+          id: string
+          n_value: number
+          scope: Database["public"]["Enums"]["analysis_scope"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          custom_query?: string | null
+          id?: string
+          n_value?: number
+          scope?: Database["public"]["Enums"]["analysis_scope"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          custom_query?: string | null
+          id?: string
+          n_value?: number
+          scope?: Database["public"]["Enums"]["analysis_scope"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      buffer_credentials: {
+        Row: {
+          api_token: string
+          created_at: string
+          graphql_endpoint: string
+          id: string
+          label: string
+          last_tested_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          api_token: string
+          created_at?: string
+          graphql_endpoint?: string
+          id?: string
+          label?: string
+          last_tested_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          api_token?: string
+          created_at?: string
+          graphql_endpoint?: string
+          id?: string
+          label?: string
+          last_tested_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      captions: {
+        Row: {
+          created_at: string
+          cta: string | null
+          emoji_count: number | null
+          hashtags: string[] | null
+          hook: string | null
+          id: string
+          length: number | null
+          run_id: string
+          style_tags: string[] | null
+          text: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          cta?: string | null
+          emoji_count?: number | null
+          hashtags?: string[] | null
+          hook?: string | null
+          id?: string
+          length?: number | null
+          run_id: string
+          style_tags?: string[] | null
+          text: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          cta?: string | null
+          emoji_count?: number | null
+          hashtags?: string[] | null
+          hook?: string | null
+          id?: string
+          length?: number | null
+          run_id?: string
+          style_tags?: string[] | null
+          text?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "captions_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channels: {
+        Row: {
+          active: boolean
+          buffer_channel_id: string
+          created_at: string
+          credential_id: string | null
+          id: string
+          name: string
+          platform: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          buffer_channel_id: string
+          created_at?: string
+          credential_id?: string | null
+          id?: string
+          name: string
+          platform: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          buffer_channel_id?: string
+          created_at?: string
+          credential_id?: string | null
+          id?: string
+          name?: string
+          platform?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channels_credential_id_fkey"
+            columns: ["credential_id"]
+            isOneToOne: false
+            referencedRelation: "buffer_credentials"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      learning_reports: {
+        Row: {
+          cause: string | null
+          change_recommendation: string | null
+          created_at: string
+          cta_verdict: string | null
+          emoji_verdict: string | null
+          hashtag_verdict: string | null
+          hook_verdict: string | null
+          id: string
+          length_verdict: string | null
+          raw: Json | null
+          run_id: string
+          user_id: string
+          worked: boolean | null
+        }
+        Insert: {
+          cause?: string | null
+          change_recommendation?: string | null
+          created_at?: string
+          cta_verdict?: string | null
+          emoji_verdict?: string | null
+          hashtag_verdict?: string | null
+          hook_verdict?: string | null
+          id?: string
+          length_verdict?: string | null
+          raw?: Json | null
+          run_id: string
+          user_id: string
+          worked?: boolean | null
+        }
+        Update: {
+          cause?: string | null
+          change_recommendation?: string | null
+          created_at?: string
+          cta_verdict?: string | null
+          emoji_verdict?: string | null
+          hashtag_verdict?: string | null
+          hook_verdict?: string | null
+          id?: string
+          length_verdict?: string | null
+          raw?: Json | null
+          run_id?: string
+          user_id?: string
+          worked?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "learning_reports_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      logs: {
+        Row: {
+          created_at: string
+          id: number
+          level: string
+          message: string
+          meta: Json | null
+          module: string | null
+          run_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          level?: string
+          message: string
+          meta?: Json | null
+          module?: string | null
+          run_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          level?: string
+          message?: string
+          meta?: Json | null
+          module?: string | null
+          run_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "logs_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      memory_insights: {
+        Row: {
+          active: boolean
+          category: Database["public"]["Enums"]["insight_category"]
+          channel_id: string | null
+          confidence: number
+          contradiction_count: number
+          created_at: string
+          id: string
+          insight: string
+          last_reinforced_at: string
+          support_count: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          category: Database["public"]["Enums"]["insight_category"]
+          channel_id?: string | null
+          confidence?: number
+          contradiction_count?: number
+          created_at?: string
+          id?: string
+          insight: string
+          last_reinforced_at?: string
+          support_count?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          category?: Database["public"]["Enums"]["insight_category"]
+          channel_id?: string | null
+          confidence?: number
+          contradiction_count?: number
+          created_at?: string
+          id?: string
+          insight?: string
+          last_reinforced_at?: string
+          support_count?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "memory_insights_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      post_analytics: {
+        Row: {
+          comments: number | null
+          fetched_at: string
+          id: string
+          impressions: number | null
+          likes: number | null
+          published_post_id: string
+          raw: Json | null
+          reach: number | null
+          saves: number | null
+          shares: number | null
+          user_id: string
+          views: number | null
+        }
+        Insert: {
+          comments?: number | null
+          fetched_at?: string
+          id?: string
+          impressions?: number | null
+          likes?: number | null
+          published_post_id: string
+          raw?: Json | null
+          reach?: number | null
+          saves?: number | null
+          shares?: number | null
+          user_id: string
+          views?: number | null
+        }
+        Update: {
+          comments?: number | null
+          fetched_at?: string
+          id?: string
+          impressions?: number | null
+          likes?: number | null
+          published_post_id?: string
+          raw?: Json | null
+          reach?: number | null
+          saves?: number | null
+          shares?: number | null
+          user_id?: string
+          views?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_analytics_published_post_id_fkey"
+            columns: ["published_post_id"]
+            isOneToOne: false
+            referencedRelation: "published_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          id: string
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          id: string
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      published_posts: {
+        Row: {
+          buffer_post_id: string | null
+          channel_id: string | null
+          created_at: string
+          id: string
+          permalink: string | null
+          platform: string | null
+          posted_at: string | null
+          raw: Json | null
+          run_id: string
+          user_id: string
+        }
+        Insert: {
+          buffer_post_id?: string | null
+          channel_id?: string | null
+          created_at?: string
+          id?: string
+          permalink?: string | null
+          platform?: string | null
+          posted_at?: string | null
+          raw?: Json | null
+          run_id: string
+          user_id: string
+        }
+        Update: {
+          buffer_post_id?: string | null
+          channel_id?: string | null
+          created_at?: string
+          id?: string
+          permalink?: string | null
+          platform?: string | null
+          posted_at?: string | null
+          raw?: Json | null
+          run_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "published_posts_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "published_posts_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      runs: {
+        Row: {
+          channel_id: string | null
+          created_at: string
+          duration_ms: number | null
+          error: string | null
+          finished_at: string | null
+          id: string
+          next_strategy: string | null
+          queue_item_id: string | null
+          run_number: number
+          started_at: string
+          status: Database["public"]["Enums"]["run_status"]
+          strategy_used: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          channel_id?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          next_strategy?: string | null
+          queue_item_id?: string | null
+          run_number: number
+          started_at?: string
+          status?: Database["public"]["Enums"]["run_status"]
+          strategy_used?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          channel_id?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          next_strategy?: string | null
+          queue_item_id?: string | null
+          run_number?: number
+          started_at?: string
+          status?: Database["public"]["Enums"]["run_status"]
+          strategy_used?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "runs_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "runs_queue_item_id_fkey"
+            columns: ["queue_item_id"]
+            isOneToOne: false
+            referencedRelation: "video_queue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedules: {
+        Row: {
+          active: boolean
+          channel_id: string
+          created_at: string
+          daily_times: string[]
+          id: string
+          interval_hours: number | null
+          last_run_at: string | null
+          mode: Database["public"]["Enums"]["schedule_mode"]
+          next_run_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          channel_id: string
+          created_at?: string
+          daily_times?: string[]
+          id?: string
+          interval_hours?: number | null
+          last_run_at?: string | null
+          mode?: Database["public"]["Enums"]["schedule_mode"]
+          next_run_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          channel_id?: string
+          created_at?: string
+          daily_times?: string[]
+          id?: string
+          interval_hours?: number | null
+          last_run_at?: string | null
+          mode?: Database["public"]["Enums"]["schedule_mode"]
+          next_run_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedules_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      settings: {
+        Row: {
+          analytics_delay_h: number
+          created_at: string
+          id: string
+          max_retries: number
+          notifications: Json
+          rate_limit_per_min: number
+          retry_interval_s: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          analytics_delay_h?: number
+          created_at?: string
+          id?: string
+          max_retries?: number
+          notifications?: Json
+          rate_limit_per_min?: number
+          retry_interval_s?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          analytics_delay_h?: number
+          created_at?: string
+          id?: string
+          max_retries?: number
+          notifications?: Json
+          rate_limit_per_min?: number
+          retry_interval_s?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      video_analyses: {
+        Row: {
+          actions: string[] | null
+          created_at: string
+          emotions: string[] | null
+          id: string
+          message: string | null
+          objects: string[] | null
+          people: string | null
+          raw: Json | null
+          run_id: string
+          scene: string | null
+          story: string | null
+          summary: string | null
+          topic: string | null
+          user_id: string
+        }
+        Insert: {
+          actions?: string[] | null
+          created_at?: string
+          emotions?: string[] | null
+          id?: string
+          message?: string | null
+          objects?: string[] | null
+          people?: string | null
+          raw?: Json | null
+          run_id: string
+          scene?: string | null
+          story?: string | null
+          summary?: string | null
+          topic?: string | null
+          user_id: string
+        }
+        Update: {
+          actions?: string[] | null
+          created_at?: string
+          emotions?: string[] | null
+          id?: string
+          message?: string | null
+          objects?: string[] | null
+          people?: string | null
+          raw?: Json | null
+          run_id?: string
+          scene?: string | null
+          story?: string | null
+          summary?: string | null
+          topic?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "video_analyses_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      video_queue: {
+        Row: {
+          added_at: string
+          attempts: number
+          channel_id: string | null
+          cloudinary_url: string
+          error: string | null
+          id: string
+          position: number
+          processed_at: string | null
+          status: Database["public"]["Enums"]["queue_status"]
+          user_id: string
+        }
+        Insert: {
+          added_at?: string
+          attempts?: number
+          channel_id?: string | null
+          cloudinary_url: string
+          error?: string | null
+          id?: string
+          position: number
+          processed_at?: string | null
+          status?: Database["public"]["Enums"]["queue_status"]
+          user_id: string
+        }
+        Update: {
+          added_at?: string
+          attempts?: number
+          channel_id?: string | null
+          cloudinary_url?: string
+          error?: string | null
+          id?: string
+          position?: number
+          processed_at?: string | null
+          status?: Database["public"]["Enums"]["queue_status"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "video_queue_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +772,47 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      analysis_scope:
+        | "last_n"
+        | "top_n"
+        | "highest_engagement"
+        | "highest_views"
+        | "highest_saves"
+        | "all"
+        | "custom"
+      channel_objective:
+        | "followers"
+        | "likes"
+        | "comments"
+        | "shares"
+        | "saves"
+        | "watch_time"
+        | "profile_visits"
+        | "ctr"
+        | "reach"
+        | "engagement"
+        | "brand_awareness"
+        | "custom"
+      insight_category:
+        | "hook"
+        | "length"
+        | "emoji"
+        | "hashtag"
+        | "cta"
+        | "topic"
+        | "style"
+        | "timing"
+        | "other"
+      queue_status: "pending" | "processing" | "done" | "failed" | "skipped"
+      run_status:
+        | "pending"
+        | "analyzing"
+        | "generating"
+        | "publishing"
+        | "awaiting_analytics"
+        | "complete"
+        | "failed"
+      schedule_mode: "interval" | "daily_times" | "manual"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +939,52 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      analysis_scope: [
+        "last_n",
+        "top_n",
+        "highest_engagement",
+        "highest_views",
+        "highest_saves",
+        "all",
+        "custom",
+      ],
+      channel_objective: [
+        "followers",
+        "likes",
+        "comments",
+        "shares",
+        "saves",
+        "watch_time",
+        "profile_visits",
+        "ctr",
+        "reach",
+        "engagement",
+        "brand_awareness",
+        "custom",
+      ],
+      insight_category: [
+        "hook",
+        "length",
+        "emoji",
+        "hashtag",
+        "cta",
+        "topic",
+        "style",
+        "timing",
+        "other",
+      ],
+      queue_status: ["pending", "processing", "done", "failed", "skipped"],
+      run_status: [
+        "pending",
+        "analyzing",
+        "generating",
+        "publishing",
+        "awaiting_analytics",
+        "complete",
+        "failed",
+      ],
+      schedule_mode: ["interval", "daily_times", "manual"],
+    },
   },
 } as const
