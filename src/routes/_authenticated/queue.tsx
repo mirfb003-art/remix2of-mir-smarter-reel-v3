@@ -27,15 +27,21 @@ function QueuePage() {
   const retryDl = useServerFn(retryDeadLetter);
   const qc = useQueryClient();
 
+  const campaignId = useActiveCampaignId();
+  const fileRef = useRef<HTMLInputElement>(null);
+
   const [text, setText] = useState("");
   const [channelId, setChannelId] = useState<string>("");
 
-  const { data: items } = useQuery({ queryKey: ["queue"], queryFn: () => list() });
+  const { data: items } = useQuery({
+    queryKey: ["queue", campaignId],
+    queryFn: () => list({ data: { campaign_id: campaignId } }),
+  });
   const { data: channels } = useQuery({ queryKey: ["channels"], queryFn: () => chans() });
   const { data: deadItems } = useQuery({ queryKey: ["dead-letters"], queryFn: () => dead() });
 
   const addMut = useMutation({
-    mutationFn: (urls: string[]) => add({ data: { urls, channel_id: channelId || null } }),
+    mutationFn: (urls: string[]) => add({ data: { urls, channel_id: channelId || null, campaign_id: campaignId } }),
     onSuccess: (r) => {
       if (r.added && r.skipped) toast.success(`Added ${r.added} · skipped ${r.skipped} duplicate${r.skipped === 1 ? "" : "s"}`);
       else if (r.added) toast.success(`Added ${r.added} video${r.added === 1 ? "" : "s"}`);
@@ -45,6 +51,7 @@ function QueuePage() {
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
+
   const rmMut = useMutation({ mutationFn: (id: string) => remove({ data: { id } }), onSuccess: () => qc.invalidateQueries({ queryKey: ["queue"] }) });
   const resetMut = useMutation({ mutationFn: (id: string) => reset({ data: { id } }), onSuccess: () => qc.invalidateQueries({ queryKey: ["queue"] }) });
   const moveMut = useMutation({
