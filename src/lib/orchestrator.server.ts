@@ -263,8 +263,8 @@ async function stepPublish(
 // -------- Main entry --------
 
 export async function runOrchestrator({
-  supabase: sb, userId, channelId, resumeRunId,
-}: { supabase: Sb; userId: string; channelId: string; resumeRunId?: string }) {
+  supabase: sb, userId, channelId, resumeRunId, campaignId: campaignIdOverride,
+}: { supabase: Sb; userId: string; channelId: string; resumeRunId?: string; campaignId?: string | null }) {
 
   // ----- Resume path -----
   if (resumeRunId) {
@@ -273,6 +273,7 @@ export async function runOrchestrator({
     if (existing.status === "complete") return { runId: resumeRunId, resumed: true, alreadyComplete: true };
     return await executeSteps(sb, userId, existing as any, (existing as any).channels, existing.step_state as StepState);
   }
+
 
   // ----- Claim next pending queue item -----
   const { data: qItem, error: qErr } = await sb.from("video_queue")
