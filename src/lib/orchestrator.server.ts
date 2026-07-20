@@ -8,15 +8,20 @@ import {
   refreshHeartbeat, getActivePromptVersion, makeIdempotencyKey,
 } from "./reliability.server";
 
+import { decideStrategy, type StrategyDecision } from "./strategy-engine.server";
+import { predictMetrics, computeBaseline } from "./prediction-engine.server";
+
 type Sb = SupabaseClient;
 
 // Ordered step list. Runs resume from the first step whose output is missing.
-type Step = "analyze_previous" | "analyze_video" | "generate_caption" | "publish" | "finalize";
-const STEP_ORDER: Step[] = ["analyze_previous", "analyze_video", "generate_caption", "publish", "finalize"];
+type Step = "analyze_previous" | "analyze_video" | "strategy" | "predict" | "generate_caption" | "publish" | "finalize";
+const STEP_ORDER: Step[] = ["analyze_previous", "analyze_video", "strategy", "predict", "generate_caption", "publish", "finalize"];
 
 interface StepState {
   analyze_previous?: { done: boolean; report?: unknown };
   analyze_video?: { done: boolean; summary?: any };
+  strategy?: { done: boolean; decision?: StrategyDecision; strategyId?: string };
+  predict?: { done: boolean; predictionId?: string };
   generate_caption?: { done: boolean; caption?: any };
   publish?: { done: boolean; postId?: string; postedAt?: string };
   finalize?: { done: boolean };
