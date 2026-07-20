@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { listSchedules, upsertSchedule, deleteSchedule } from "@/lib/schedule.functions";
+import { listSchedules, upsertSchedule, deleteSchedule, setSchedulePaused } from "@/lib/schedule.functions";
 import { listChannels } from "@/lib/channels.functions";
+import { useActiveCampaignId } from "@/lib/active-campaign";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Trash2, Play, Pause } from "lucide-react";
+
 
 export const Route = createFileRoute("/_authenticated/settings/scheduler")({ component: SchedulerSettings });
 
