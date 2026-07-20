@@ -17,10 +17,12 @@ export const Route = createFileRoute("/api/public/cron/tick")({
         const now = new Date().toISOString();
         const { data: due } = await supabaseAdmin
           .from("schedules")
-          .select("id,user_id,channel_id,mode,interval_hours,daily_times")
+          .select("id,user_id,channel_id,campaign_id,mode,interval_hours,daily_times,paused,campaigns(status)")
           .eq("active", true)
+          .eq("paused", false)
           .lte("next_run_at", now)
           .limit(20);
+
 
         const results: Array<{ id: string; ok: boolean; error?: string }> = [];
         for (const s of due ?? []) {
