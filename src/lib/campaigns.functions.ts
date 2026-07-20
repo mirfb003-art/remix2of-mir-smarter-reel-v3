@@ -1,0 +1,71 @@
+import { createServerFn } from "@tanstack/react-start";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { z } from "zod";
+
+export const listCampaigns = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await context.supabase
+      .from("campaigns")
+      .select("id,name,description,objective,custom_objective,status,share_learning,created_at,updated_at")
+      .order("created_at", { ascending: true });
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  });
+
+const upsertSchema = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string().min(1).max(120),
+  description: z.string().optional().nullable(),
+  objective: z.string().min(1),
+  custom_objective: z.string().optional().nullable(),
+  share_learning: z.boolean().optional(),
+});
+
+export const upsertCampaign = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => upsertSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    if (data.id) {
+      const { error } = await context.supabase.from("campaigns").update({
+        name: data.name, description: data.description ?? null,
+        objective: data.objective, custom_objective: data.custom_objective ?? null,
+        share_learning: data.share_learning ?? false,
+      }).eq("id", data.id);
+      if (error) throw new Error(error.message);
+      return { id: data.id };
+    }
+    const { data: row, error } = await context.supabase.from("campaigns").insert({
+      user_id: context.userId, name: data.name, description: data.description ?? null,
+      objective: data.objective, custom_objective: data.custom_objective ?? null,
+      share_learning: data.share_learning ?? false,
+    }).select("id").single();
+    if (error) throw new Error(error.message);
+    return { id: row.id };
+  });
+
+export const setCampaignStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    id: z.string().uuid(),
+    status: z.enum(["active", "paused", "stopped"]),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase.from("campaigns")
+      .update({ status: data.status }).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    // Also pause/resume all schedules attached to this campaign.
+    await context.supabase.from("schedules")
+      .update({ paused: data.status !== "active" })
+      .eq("campaign_id", data.id);
+    return { ok: true };
+  });
+
+export const deleteCampaign = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase.from("campaigns").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
