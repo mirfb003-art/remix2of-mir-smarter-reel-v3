@@ -41,6 +41,7 @@ export const Route = createFileRoute("/api/public/cron/fetch-analytics")({
         const now = Date.now();
         const results: Array<{ id: string; ok: boolean; error?: string }> = [];
 
+        const usersTouched = new Set<string>();
         for (const p of posts ?? []) {
           if (hasAnalytics.has(p.id)) continue;
           const delayH = delayByUser.get(p.user_id) ?? 24;
@@ -55,9 +56,7 @@ export const Route = createFileRoute("/api/public/cron/fetch-analytics")({
             const res = await buffer.getPost(p.buffer_post_id!);
             if (!res) { results.push({ id: p.id, ok: false, error: "post not found" }); continue; }
             const a = res.analytics ?? {};
-            await supabaseAdmin.from("post_analytics").insert({
-              published_post_id: p.id,
-              user_id: p.user_id,
+            const metrics = {
               views: Number(a.views ?? a.impressions ?? 0) || null,
               likes: Number(a.likes ?? a.reactions ?? 0) || null,
               comments: Number(a.comments ?? 0) || null,
@@ -65,11 +64,34 @@ export const Route = createFileRoute("/api/public/cron/fetch-analytics")({
               saves: Number(a.saves ?? 0) || null,
               reach: Number(a.reach ?? 0) || null,
               impressions: Number(a.impressions ?? 0) || null,
+            };
+            await supabaseAdmin.from("post_analytics").insert({
+              published_post_id: p.id,
+              user_id: p.user_id,
+              ...metrics,
               raw: res.raw as never,
             });
+
+            // Score the run's prediction if there is one.
+            const { data: run } = await supabaseAdmin
+              .from("runs").select("prediction_id")
+              .eq("id", (p as any).run_id ?? "").maybeSingle();
+            if (run?.prediction_id) {
+              const { evaluatePrediction } = await import("@/lib/prediction-engine.server");
+              await evaluatePrediction(supabaseAdmin, run.prediction_id, metrics);
+            }
+            usersTouched.add(p.user_id);
             results.push({ id: p.id, ok: true });
           } catch (e) {
             results.push({ id: p.id, ok: false, error: e instanceof Error ? e.message : String(e) });
+          }
+        }
+
+        // Recompute cross-run trends for every user that got new analytics.
+        if (usersTouched.size) {
+          const { recomputeTrends } = await import("@/lib/trend-analyzer.server");
+          for (const uid of usersTouched) {
+            try { await recomputeTrends(supabaseAdmin, uid); } catch { /* trend failure must not break analytics ingestion */ }
           }
         }
 
