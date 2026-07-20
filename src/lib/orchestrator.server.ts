@@ -422,11 +422,15 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
     if (!state.strategy?.done) {
       await refreshHeartbeat(sb, runId, channelId);
       const objective = aiSet?.objective ?? "engagement";
+      const memQ = sb.from("memory_insights").select("category,insight,confidence").eq("user_id", userId).eq("active", true).order("confidence", { ascending: false }).limit(15);
+      const trQ = sb.from("insight_trends").select("dimension,value,metric,lift_pct,human_summary").eq("user_id", userId).order("confidence", { ascending: false }).limit(12);
+      const rpQ = sb.from("learning_reports").select("worked,cause,change_recommendation").eq("user_id", userId).order("created_at", { ascending: false }).limit(3);
       const [memRes, trendRes, reportsRes] = await Promise.all([
-        sb.from("memory_insights").select("category,insight,confidence").eq("user_id", userId).eq("active", true).order("confidence", { ascending: false }).limit(15),
-        sb.from("insight_trends").select("dimension,value,metric,lift_pct,human_summary").eq("user_id", userId).order("confidence", { ascending: false }).limit(12),
-        sb.from("learning_reports").select("worked,cause,change_recommendation").eq("user_id", userId).order("created_at", { ascending: false }).limit(3),
+        scopeCampaignId ? memQ.eq("campaign_id", scopeCampaignId) : memQ,
+        scopeCampaignId ? trQ.eq("campaign_id", scopeCampaignId) : trQ,
+        scopeCampaignId ? rpQ.eq("campaign_id", scopeCampaignId) : rpQ,
       ]);
+
       const { decision, strategyId } = await decideStrategy({
         sb, userId, runId, apiKey, model, objective,
         videoSummary: state.analyze_video!.summary,
