@@ -398,14 +398,48 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
       await refreshHeartbeat(sb, runId, channelId);
       const summary = await stepAnalyzeVideo(sb, userId, runId, queueUrl, apiKey, model, promptVer.vision_prompt);
       state.analyze_video = { done: true, summary };
+      await persistStepState(sb, runId, state, "strategy");
+    }
+
+    // Step: strategy — decide structured direction before writing anything.
+    if (!state.strategy?.done) {
+      await refreshHeartbeat(sb, runId, channelId);
+      const objective = aiSet?.objective ?? "engagement";
+      const [memRes, trendRes, reportsRes] = await Promise.all([
+        sb.from("memory_insights").select("category,insight,confidence").eq("user_id", userId).eq("active", true).order("confidence", { ascending: false }).limit(15),
+        sb.from("insight_trends").select("dimension,value,metric,lift_pct,human_summary").eq("user_id", userId).order("confidence", { ascending: false }).limit(12),
+        sb.from("learning_reports").select("worked,cause,change_recommendation").eq("user_id", userId).order("created_at", { ascending: false }).limit(3),
+      ]);
+      const { decision, strategyId } = await decideStrategy({
+        sb, userId, runId, apiKey, model, objective,
+        videoSummary: state.analyze_video!.summary,
+        memoryTop: memRes.data ?? [],
+        trends: trendRes.data ?? [],
+        recentReports: reportsRes.data ?? [],
+      });
+      state.strategy = { done: true, decision, strategyId };
+      await persistStepState(sb, runId, state, "predict");
+    }
+
+    // Step: predict — forecast metrics before publishing so we can score later.
+    if (!state.predict?.done) {
+      await refreshHeartbeat(sb, runId, channelId);
+      const baseline = await computeBaseline(sb, userId);
+      const { predictionId } = await predictMetrics({
+        sb, userId, runId, apiKey, model,
+        strategy: state.strategy!.decision,
+        videoSummary: state.analyze_video!.summary,
+        baseline,
+      });
+      state.predict = { done: true, predictionId };
       await persistStepState(sb, runId, state, "generate_caption");
     }
 
-    // Step: generate caption
+    // Step: generate caption (strategy-directed)
     if (!state.generate_caption?.done) {
       await sb.from("runs").update({ status: "generating" }).eq("id", runId);
       await refreshHeartbeat(sb, runId, channelId);
-      const caption = await stepGenerateCaption(sb, userId, runId, apiKey, state.analyze_video!.summary, promptVer.caption_prompt);
+      const caption = await stepGenerateCaption(sb, userId, runId, apiKey, state.analyze_video!.summary, promptVer.caption_prompt, state.strategy?.decision ?? null);
       state.generate_caption = { done: true, caption };
       await persistStepState(sb, runId, state, "publish");
     }
