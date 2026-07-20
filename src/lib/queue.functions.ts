@@ -70,10 +70,35 @@ export const resetQueueItem = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase.from("video_queue")
-      .update({ status: "pending", error: null, attempts: 0, processed_at: null })
+      .update({ status: "pending", error: null, attempts: 0, processed_at: null, dead_letter_at: null, last_error_module: null })
       .eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+// Retry a dead-lettered item — clears failure state and returns it to pending.
+export const retryDeadLetter = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase.from("video_queue")
+      .update({ status: "pending", error: null, attempts: 0, dead_letter_at: null })
+      .eq("id", data.id).eq("status", "dead_letter");
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+// List all dead-lettered items with attempt/limit metadata.
+export const listDeadLetters = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await context.supabase
+      .from("video_queue")
+      .select("id,cloudinary_url,attempts,max_attempts,error,last_error_module,dead_letter_at,channel_id")
+      .eq("status", "dead_letter")
+      .order("dead_letter_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    return data ?? [];
   });
 
 // Swap the position of two adjacent (or any two) queue items.
