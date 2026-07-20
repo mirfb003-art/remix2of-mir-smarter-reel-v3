@@ -364,10 +364,20 @@ export async function runOrchestrator({
 async function executeSteps(sb: Sb, userId: string, run: any, channel: any, state: StepState) {
   const runId = run.id;
   const channelId = channel.id;
+  const campaignId: string | null = run.campaign_id ?? null;
   const t0 = Date.now();
   const apiKey = requireLovableApiKey();
   const { data: aiSet } = await sb.from("ai_settings").select("model,objective").eq("user_id", userId).maybeSingle();
   const model = aiSet?.model ?? "google/gemini-3-flash-preview";
+
+  // Determine learning scope. By default, learning is isolated per campaign.
+  // If the campaign has share_learning=true (or the run has no campaign), fall back to user-wide learning.
+  let scopeCampaignId: string | null = campaignId;
+  if (campaignId) {
+    const { data: camp } = await sb.from("campaigns").select("share_learning").eq("id", campaignId).maybeSingle();
+    if (camp?.share_learning) scopeCampaignId = null;
+  }
+
 
   // Load queue item info if not already on run row.
   let queueItemId: string | undefined = run.queue_item_id;
