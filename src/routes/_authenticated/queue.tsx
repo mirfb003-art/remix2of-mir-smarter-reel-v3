@@ -1,18 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { listQueue, addToQueue, removeFromQueue, resetQueueItem, moveQueueItem, listDeadLetters, retryDeadLetter } from "@/lib/queue.functions";
 import { listChannels } from "@/lib/channels.functions";
+import { useActiveCampaignId } from "@/lib/active-campaign";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Trash2, RotateCcw, Plus, ListVideo, ArrowUp, ArrowDown, AlertTriangle, RefreshCw } from "lucide-react";
+import { Trash2, RotateCcw, Plus, ListVideo, ArrowUp, ArrowDown, AlertTriangle, RefreshCw, Upload } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export const Route = createFileRoute("/_authenticated/queue")({ component: QueuePage });
+
 
 function QueuePage() {
   const list = useServerFn(listQueue);
