@@ -50,7 +50,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
 
+        <div className="px-3 pt-3">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Campaign</div>
+          <CampaignSelector />
+        </div>
+
         <nav className="p-3 space-y-1">
+
           {nav.map((item) => {
             const active = location.pathname === item.to || location.pathname.startsWith(item.to + "/");
             const Icon = item.icon;
