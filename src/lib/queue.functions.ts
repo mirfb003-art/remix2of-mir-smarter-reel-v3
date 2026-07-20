@@ -21,6 +21,23 @@ export const addToQueue = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => addSchema.parse(d))
   .handler(async ({ data, context }) => {
+    // Dedupe: drop URLs that already exist (any status) for this user.
+    const { data: existing } = await context.supabase
+      .from("video_queue")
+      .select("cloudinary_url")
+      .eq("user_id", context.userId)
+      .in("cloudinary_url", data.urls);
+    const seen = new Set((existing ?? []).map((r) => r.cloudinary_url));
+    // Also dedupe within the incoming batch.
+    const fresh: string[] = [];
+    const batch = new Set<string>();
+    for (const u of data.urls) {
+      if (seen.has(u) || batch.has(u)) continue;
+      batch.add(u);
+      fresh.push(u);
+    }
+    if (!fresh.length) return { added: 0, skipped: data.urls.length };
+
     const { data: maxRow } = await context.supabase
       .from("video_queue")
       .select("position")
@@ -28,7 +45,7 @@ export const addToQueue = createServerFn({ method: "POST" })
       .limit(1)
       .maybeSingle();
     const start = (maxRow?.position ?? 0) + 1;
-    const rows = data.urls.map((u, i) => ({
+    const rows = fresh.map((u, i) => ({
       user_id: context.userId,
       cloudinary_url: u,
       channel_id: data.channel_id ?? null,
@@ -36,7 +53,7 @@ export const addToQueue = createServerFn({ method: "POST" })
     }));
     const { error } = await context.supabase.from("video_queue").insert(rows);
     if (error) throw new Error(error.message);
-    return { added: rows.length };
+    return { added: rows.length, skipped: data.urls.length - rows.length };
   });
 
 export const removeFromQueue = createServerFn({ method: "POST" })
@@ -56,5 +73,32 @@ export const resetQueueItem = createServerFn({ method: "POST" })
       .update({ status: "pending", error: null, attempts: 0, processed_at: null })
       .eq("id", data.id);
     if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+// Swap the position of two adjacent (or any two) queue items.
+export const moveQueueItem = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid(), direction: z.enum(["up", "down"]) }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: items, error } = await context.supabase
+      .from("video_queue")
+      .select("id,position,status")
+      .eq("user_id", context.userId)
+      .order("position", { ascending: true });
+    if (error) throw new Error(error.message);
+    const list = items ?? [];
+    const idx = list.findIndex((r) => r.id === data.id);
+    if (idx < 0) throw new Error("Item not found");
+    const swapIdx = data.direction === "up" ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= list.length) return { ok: true };
+    const a = list[idx], b = list[swapIdx];
+    // Only allow reordering pending items — moving a processing/done item is meaningless.
+    if (a.status !== "pending" || b.status !== "pending") throw new Error("Only pending items can be reordered");
+    // Two-step swap to avoid unique-position conflicts if any constraint is added later.
+    const tmp = -Math.abs(a.position) - 1;
+    await context.supabase.from("video_queue").update({ position: tmp }).eq("id", a.id);
+    await context.supabase.from("video_queue").update({ position: a.position }).eq("id", b.id);
+    await context.supabase.from("video_queue").update({ position: b.position }).eq("id", a.id);
     return { ok: true };
   });
