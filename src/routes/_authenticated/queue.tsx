@@ -1,18 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { listQueue, addToQueue, removeFromQueue, resetQueueItem, moveQueueItem, listDeadLetters, retryDeadLetter } from "@/lib/queue.functions";
 import { listChannels } from "@/lib/channels.functions";
+import { useActiveCampaignId } from "@/lib/active-campaign";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Trash2, RotateCcw, Plus, ListVideo, ArrowUp, ArrowDown, AlertTriangle, RefreshCw } from "lucide-react";
+import { Trash2, RotateCcw, Plus, ListVideo, ArrowUp, ArrowDown, AlertTriangle, RefreshCw, Upload } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export const Route = createFileRoute("/_authenticated/queue")({ component: QueuePage });
+
 
 function QueuePage() {
   const list = useServerFn(listQueue);
@@ -25,15 +27,21 @@ function QueuePage() {
   const retryDl = useServerFn(retryDeadLetter);
   const qc = useQueryClient();
 
+  const campaignId = useActiveCampaignId();
+  const fileRef = useRef<HTMLInputElement>(null);
+
   const [text, setText] = useState("");
   const [channelId, setChannelId] = useState<string>("");
 
-  const { data: items } = useQuery({ queryKey: ["queue"], queryFn: () => list() });
+  const { data: items } = useQuery({
+    queryKey: ["queue", campaignId],
+    queryFn: () => list({ data: { campaign_id: campaignId } }),
+  });
   const { data: channels } = useQuery({ queryKey: ["channels"], queryFn: () => chans() });
   const { data: deadItems } = useQuery({ queryKey: ["dead-letters"], queryFn: () => dead() });
 
   const addMut = useMutation({
-    mutationFn: (urls: string[]) => add({ data: { urls, channel_id: channelId || null } }),
+    mutationFn: (urls: string[]) => add({ data: { urls, channel_id: channelId || null, campaign_id: campaignId } }),
     onSuccess: (r) => {
       if (r.added && r.skipped) toast.success(`Added ${r.added} · skipped ${r.skipped} duplicate${r.skipped === 1 ? "" : "s"}`);
       else if (r.added) toast.success(`Added ${r.added} video${r.added === 1 ? "" : "s"}`);
@@ -43,6 +51,7 @@ function QueuePage() {
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
+
   const rmMut = useMutation({ mutationFn: (id: string) => remove({ data: { id } }), onSuccess: () => qc.invalidateQueries({ queryKey: ["queue"] }) });
   const resetMut = useMutation({ mutationFn: (id: string) => reset({ data: { id } }), onSuccess: () => qc.invalidateQueries({ queryKey: ["queue"] }) });
   const moveMut = useMutation({
@@ -65,6 +74,15 @@ function QueuePage() {
     if (!urls.length) return toast.error("Paste one or more URLs");
     addMut.mutate(urls);
   }
+
+  async function onFile(f: File) {
+    const raw = await f.text();
+    // Accept CSV, TSV, or line-per-URL. Extract anything that looks like a URL.
+    const urls = Array.from(raw.matchAll(/https?:\/\/[^\s,"']+/gi)).map((m) => m[0]);
+    if (!urls.length) return toast.error("No URLs found in file");
+    addMut.mutate(urls);
+  }
+
 
   const list_ = items ?? [];
   return (
@@ -91,7 +109,13 @@ function QueuePage() {
               </SelectContent>
             </Select>
             <Button onClick={submit} disabled={addMut.isPending}>Add to queue</Button>
+            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={addMut.isPending}>
+              <Upload className="h-4 w-4 mr-1"/>Import CSV/TXT
+            </Button>
+            <input ref={fileRef} type="file" accept=".csv,.txt,.tsv,text/plain" className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }} />
           </div>
+
         </CardContent>
       </Card>
 

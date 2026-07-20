@@ -17,20 +17,26 @@ export const Route = createFileRoute("/api/public/cron/tick")({
         const now = new Date().toISOString();
         const { data: due } = await supabaseAdmin
           .from("schedules")
-          .select("id,user_id,channel_id,mode,interval_hours,daily_times")
+          .select("id,user_id,channel_id,campaign_id,mode,interval_hours,daily_times,paused,campaigns(status)")
           .eq("active", true)
+          .eq("paused", false)
           .lte("next_run_at", now)
           .limit(20);
 
+
         const results: Array<{ id: string; ok: boolean; error?: string }> = [];
         for (const s of due ?? []) {
+          // Skip when the campaign is paused/stopped.
+          const campStatus = (s as any).campaigns?.status;
+          if (campStatus && campStatus !== "active") { results.push({ id: s.id, ok: false, error: `campaign ${campStatus}` }); continue; }
           try {
             const { runOrchestrator } = await import("@/lib/orchestrator.server");
-            await runOrchestrator({ supabase: supabaseAdmin as any, userId: s.user_id, channelId: s.channel_id });
+            await runOrchestrator({ supabase: supabaseAdmin as any, userId: s.user_id, channelId: s.channel_id, campaignId: s.campaign_id ?? null });
             results.push({ id: s.id, ok: true });
           } catch (e) {
             results.push({ id: s.id, ok: false, error: e instanceof Error ? e.message : String(e) });
           }
+
           // Advance next_run_at
           let next: string | null = null;
           const nowD = new Date();

@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { listSchedules, upsertSchedule, deleteSchedule } from "@/lib/schedule.functions";
+import { listSchedules, upsertSchedule, deleteSchedule, setSchedulePaused } from "@/lib/schedule.functions";
 import { listChannels } from "@/lib/channels.functions";
+import { useActiveCampaignId } from "@/lib/active-campaign";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Trash2, Play, Pause } from "lucide-react";
+
 
 export const Route = createFileRoute("/_authenticated/settings/scheduler")({ component: SchedulerSettings });
 
@@ -19,8 +21,10 @@ function SchedulerSettings() {
   const list = useServerFn(listSchedules);
   const upsert = useServerFn(upsertSchedule);
   const del = useServerFn(deleteSchedule);
+  const pauseFn = useServerFn(setSchedulePaused);
   const chansFn = useServerFn(listChannels);
   const qc = useQueryClient();
+  const campaignId = useActiveCampaignId();
 
   const { data } = useQuery({ queryKey: ["schedules"], queryFn: () => list() });
   const { data: chans } = useQuery({ queryKey: ["channels"], queryFn: () => chansFn() });
@@ -32,7 +36,7 @@ function SchedulerSettings() {
 
   const mut = useMutation({
     mutationFn: () => upsert({ data: {
-      channel_id: channelId, mode,
+      channel_id: channelId, campaign_id: campaignId, mode,
       interval_hours: mode === "interval" ? interval : null,
       daily_times: mode === "daily_times" ? times.split(",").map(s => s.trim()).filter(Boolean) : [],
       active: true,
@@ -41,6 +45,11 @@ function SchedulerSettings() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
   const delMut = useMutation({ mutationFn: (id: string) => del({ data: { id } }), onSuccess: () => qc.invalidateQueries({ queryKey: ["schedules"] }) });
+  const pauseMut = useMutation({
+    mutationFn: (p: { id: string; paused: boolean }) => pauseFn({ data: p }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["schedules"] }),
+  });
+
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -94,8 +103,20 @@ function SchedulerSettings() {
                         {s.next_run_at ? ` · next ${new Date(s.next_run_at).toLocaleString()}` : ""}
                       </div>
                     </div>
-                    <Badge variant={s.active ? "default" : "outline"}>{s.active ? "active" : "paused"}</Badge>
+                    <Badge variant={s.paused ? "secondary" : s.active ? "default" : "outline"}>
+                      {s.paused ? "paused" : s.active ? "active" : "off"}
+                    </Badge>
+                    {s.paused ? (
+                      <Button size="icon" variant="ghost" title="Resume" onClick={() => pauseMut.mutate({ id: s.id, paused: false })}>
+                        <Play className="h-4 w-4 text-success"/>
+                      </Button>
+                    ) : (
+                      <Button size="icon" variant="ghost" title="Pause" onClick={() => pauseMut.mutate({ id: s.id, paused: true })}>
+                        <Pause className="h-4 w-4"/>
+                      </Button>
+                    )}
                     <Button size="icon" variant="ghost" onClick={() => delMut.mutate(s.id)}><Trash2 className="h-4 w-4 text-destructive"/></Button>
+
                   </li>
                 );
               })}

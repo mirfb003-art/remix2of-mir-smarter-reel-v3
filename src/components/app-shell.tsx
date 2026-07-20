@@ -2,20 +2,23 @@ import type { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   LayoutDashboard, ListVideo, Table2, Brain, LogOut, Sparkles, TrendingUp,
-  Cable, Wand2, Search, Clock, SlidersHorizontal,
+  Cable, Wand2, Search, Clock, SlidersHorizontal, FolderKanban,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { CampaignSelector } from "@/components/campaign-selector";
 
 const UNLOCK_KEY = "loop:unlocked";
 
 const nav = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/campaigns", label: "Campaigns", icon: FolderKanban },
   { to: "/queue", label: "Queue", icon: ListVideo },
   { to: "/sheet", label: "Sheet", icon: Table2 },
   { to: "/learning", label: "Learning", icon: Brain },
   { to: "/insights", label: "Insights", icon: TrendingUp },
 ];
+
 
 const settingsNav = [
   { to: "/settings/buffer", label: "Buffer", icon: Cable },
@@ -47,7 +50,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
 
+        <div className="px-3 pt-3">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Campaign</div>
+          <CampaignSelector />
+        </div>
+
         <nav className="p-3 space-y-1">
+
           {nav.map((item) => {
             const active = location.pathname === item.to || location.pathname.startsWith(item.to + "/");
             const Icon = item.icon;

@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listRuns } from "@/lib/runs.functions";
+import { useActiveCampaignId } from "@/lib/active-campaign";
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -105,7 +106,8 @@ function download(name: string, mime: string, data: string | Blob) {
 
 function SheetPage() {
   const fn = useServerFn(listRuns);
-  const { data } = useQuery({ queryKey: ["runs"], queryFn: () => fn(), refetchInterval: 15000 });
+  const campaignId = useActiveCampaignId();
+  const { data } = useQuery({ queryKey: ["runs", campaignId], queryFn: () => fn({ data: { campaign_id: campaignId } }), refetchInterval: 15000 });
   const rows = useMemo(() => flatten(data ?? []), [data]);
   const [q, setQ] = useState("");
   const [page, setPage] = useState(0);

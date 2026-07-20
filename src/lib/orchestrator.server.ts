@@ -263,8 +263,8 @@ async function stepPublish(
 // -------- Main entry --------
 
 export async function runOrchestrator({
-  supabase: sb, userId, channelId, resumeRunId,
-}: { supabase: Sb; userId: string; channelId: string; resumeRunId?: string }) {
+  supabase: sb, userId, channelId, resumeRunId, campaignId: campaignIdOverride,
+}: { supabase: Sb; userId: string; channelId: string; resumeRunId?: string; campaignId?: string | null }) {
 
   // ----- Resume path -----
   if (resumeRunId) {
@@ -274,15 +274,20 @@ export async function runOrchestrator({
     return await executeSteps(sb, userId, existing as any, (existing as any).channels, existing.step_state as StepState);
   }
 
-  // ----- Claim next pending queue item -----
-  const { data: qItem, error: qErr } = await sb.from("video_queue")
-    .select("id, cloudinary_url, attempts, max_attempts, idempotency_key")
+
+  // ----- Claim next pending queue item (optionally scoped to a campaign) -----
+  let qQuery = sb.from("video_queue")
+    .select("id, cloudinary_url, attempts, max_attempts, idempotency_key, campaign_id")
     .eq("user_id", userId)
     .eq("status", "pending")
     .order("position", { ascending: true })
-    .limit(1).maybeSingle();
+    .limit(1);
+  if (campaignIdOverride) qQuery = qQuery.eq("campaign_id", campaignIdOverride);
+  const { data: qItem, error: qErr } = await qQuery.maybeSingle();
   if (qErr) throw new Error(qErr.message);
   if (!qItem) throw new Error("Queue is empty. Add Cloudinary URLs first.");
+  const campaignId = campaignIdOverride ?? (qItem as any).campaign_id ?? null;
+
 
   // ----- Idempotency: if a run already exists for this queue item, reuse it -----
   const idemKey = qItem.idempotency_key ?? makeIdempotencyKey([qItem.id, channelId]);
@@ -319,6 +324,7 @@ export async function runOrchestrator({
     const promptVer = await getActivePromptVersion(sb, userId);
     const { data: run, error: runErr } = await sb.from("runs").insert({
       user_id: userId, channel_id: channelId, queue_item_id: qItem.id,
+      campaign_id: campaignId,
       run_number: nextNum, status: "analyzing",
       idempotency_key: idemKey,
       current_step: "analyze_previous",
@@ -330,6 +336,7 @@ export async function runOrchestrator({
     if (runErr || !run) throw new Error(runErr?.message ?? "Failed to create run");
     runId = run.id;
   }
+
 
   // ----- Acquire channel lock -----
   const gotLock = await acquireChannelLock(sb, channelId, runId);
@@ -357,10 +364,20 @@ export async function runOrchestrator({
 async function executeSteps(sb: Sb, userId: string, run: any, channel: any, state: StepState) {
   const runId = run.id;
   const channelId = channel.id;
+  const campaignId: string | null = run.campaign_id ?? null;
   const t0 = Date.now();
   const apiKey = requireLovableApiKey();
   const { data: aiSet } = await sb.from("ai_settings").select("model,objective").eq("user_id", userId).maybeSingle();
   const model = aiSet?.model ?? "google/gemini-3-flash-preview";
+
+  // Determine learning scope. By default, learning is isolated per campaign.
+  // If the campaign has share_learning=true (or the run has no campaign), fall back to user-wide learning.
+  let scopeCampaignId: string | null = campaignId;
+  if (campaignId) {
+    const { data: camp } = await sb.from("campaigns").select("share_learning").eq("id", campaignId).maybeSingle();
+    if (camp?.share_learning) scopeCampaignId = null;
+  }
+
 
   // Load queue item info if not already on run row.
   let queueItemId: string | undefined = run.queue_item_id;
@@ -405,11 +422,15 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
     if (!state.strategy?.done) {
       await refreshHeartbeat(sb, runId, channelId);
       const objective = aiSet?.objective ?? "engagement";
+      const memQ = sb.from("memory_insights").select("category,insight,confidence").eq("user_id", userId).eq("active", true).order("confidence", { ascending: false }).limit(15);
+      const trQ = sb.from("insight_trends").select("dimension,value,metric,lift_pct,human_summary").eq("user_id", userId).order("confidence", { ascending: false }).limit(12);
+      const rpQ = sb.from("learning_reports").select("worked,cause,change_recommendation").eq("user_id", userId).order("created_at", { ascending: false }).limit(3);
       const [memRes, trendRes, reportsRes] = await Promise.all([
-        sb.from("memory_insights").select("category,insight,confidence").eq("user_id", userId).eq("active", true).order("confidence", { ascending: false }).limit(15),
-        sb.from("insight_trends").select("dimension,value,metric,lift_pct,human_summary").eq("user_id", userId).order("confidence", { ascending: false }).limit(12),
-        sb.from("learning_reports").select("worked,cause,change_recommendation").eq("user_id", userId).order("created_at", { ascending: false }).limit(3),
+        scopeCampaignId ? memQ.eq("campaign_id", scopeCampaignId) : memQ,
+        scopeCampaignId ? trQ.eq("campaign_id", scopeCampaignId) : trQ,
+        scopeCampaignId ? rpQ.eq("campaign_id", scopeCampaignId) : rpQ,
       ]);
+
       const { decision, strategyId } = await decideStrategy({
         sb, userId, runId, apiKey, model, objective,
         videoSummary: state.analyze_video!.summary,
