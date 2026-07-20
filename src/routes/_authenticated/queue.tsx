@@ -50,6 +50,15 @@ function QueuePage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["queue"] }),
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
+  const retryDlMut = useMutation({
+    mutationFn: (id: string) => retryDl({ data: { id } }),
+    onSuccess: () => {
+      toast.success("Requeued for retry");
+      qc.invalidateQueries({ queryKey: ["dead-letters"] });
+      qc.invalidateQueries({ queryKey: ["queue"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
 
   function submit() {
     const urls = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
