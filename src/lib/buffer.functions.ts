@@ -73,3 +73,17 @@ export const testBufferCred = createServerFn({ method: "POST" })
       .eq("id", data.id);
     return result;
   });
+
+export const verifyBufferSchema = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: cred, error } = await context.supabase
+      .from("buffer_credentials")
+      .select("api_token,graphql_endpoint")
+      .eq("id", data.id)
+      .single();
+    if (error || !cred) throw new Error("Credential not found");
+    const { makeBufferClient } = await import("./buffer.server");
+    return await makeBufferClient(cred.api_token, cred.graphql_endpoint).verifySchema();
+  });
