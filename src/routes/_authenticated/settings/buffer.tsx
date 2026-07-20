@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { listBufferCreds, saveBufferCred, deleteBufferCred, testBufferCred } from "@/lib/buffer.functions";
+import { listBufferCreds, saveBufferCred, deleteBufferCred, testBufferCred, verifyBufferSchema } from "@/lib/buffer.functions";
 import { listChannels, saveChannel, deleteChannel } from "@/lib/channels.functions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Plug, Trash2, CheckCircle2 } from "lucide-react";
+import { Plug, Trash2, CheckCircle2, ShieldCheck } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/settings/buffer")({ component: BufferSettings });
 
@@ -20,6 +20,7 @@ function BufferSettings() {
   const save = useServerFn(saveBufferCred);
   const del = useServerFn(deleteBufferCred);
   const test = useServerFn(testBufferCred);
+  const verify = useServerFn(verifyBufferSchema);
   const chansFn = useServerFn(listChannels);
   const saveChan = useServerFn(saveChannel);
   const delChan = useServerFn(deleteChannel);
@@ -46,6 +47,14 @@ function BufferSettings() {
   const testMut = useMutation({
     mutationFn: (id: string) => test({ data: { id } }),
     onSuccess: (r) => { r.ok ? toast.success("Connected") : toast.error(r.message ?? "Failed"); qc.invalidateQueries({ queryKey: ["buffer-creds"] }); },
+  });
+  const verifyMut = useMutation({
+    mutationFn: (id: string) => verify({ data: { id } }),
+    onSuccess: (r) => {
+      if (r.ok) toast.success(`${r.message} · args: ${r.inputFields.join(", ") || "(none)"}`, { duration: 8000 });
+      else toast.error(r.message, { duration: 10000 });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
   const chanMut = useMutation({
     mutationFn: () => saveChan({ data: { name: chName, platform: chPlatform, buffer_channel_id: chBufferId, credential_id: chCredId || null, active: true } }),
@@ -87,6 +96,7 @@ function BufferSettings() {
                   </div>
                   <Badge variant={c.status === "connected" ? "default" : "outline"}>{c.status}</Badge>
                   <Button size="sm" variant="outline" onClick={() => testMut.mutate(c.id)} disabled={testMut.isPending}><CheckCircle2 className="h-4 w-4 mr-1"/>Test</Button>
+                  <Button size="sm" variant="outline" onClick={() => verifyMut.mutate(c.id)} disabled={verifyMut.isPending}><ShieldCheck className="h-4 w-4 mr-1"/>Verify publish</Button>
                   <Button size="icon" variant="ghost" onClick={() => delMut.mutate(c.id)}><Trash2 className="h-4 w-4 text-destructive"/></Button>
                 </li>
               ))}
