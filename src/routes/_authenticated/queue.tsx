@@ -21,6 +21,8 @@ function QueuePage() {
   const reset = useServerFn(resetQueueItem);
   const move = useServerFn(moveQueueItem);
   const chans = useServerFn(listChannels);
+  const dead = useServerFn(listDeadLetters);
+  const retryDl = useServerFn(retryDeadLetter);
   const qc = useQueryClient();
 
   const [text, setText] = useState("");
@@ -28,6 +30,7 @@ function QueuePage() {
 
   const { data: items } = useQuery({ queryKey: ["queue"], queryFn: () => list() });
   const { data: channels } = useQuery({ queryKey: ["channels"], queryFn: () => chans() });
+  const { data: deadItems } = useQuery({ queryKey: ["dead-letters"], queryFn: () => dead() });
 
   const addMut = useMutation({
     mutationFn: (urls: string[]) => add({ data: { urls, channel_id: channelId || null } }),
