@@ -3,20 +3,17 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { dashboardStats, manualRun } from "@/lib/runs.functions";
 import { listChannels } from "@/lib/channels.functions";
+import { useActiveCampaignId } from "@/lib/active-campaign";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Play, Sparkles, TrendingUp, Clock, ListVideo, CheckCircle2, XCircle, Brain } from "lucide-react";
 import { toast } from "sonner";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState } from "react";
 
-export const Route = createFileRoute("/_authenticated/dashboard")({
-  component: DashboardPage,
-});
+export const Route = createFileRoute("/_authenticated/dashboard")({ component: DashboardPage });
 
 function DashboardPage() {
   const stats = useServerFn(dashboardStats);
@@ -24,17 +21,18 @@ function DashboardPage() {
   const manual = useServerFn(manualRun);
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const campaignId = useActiveCampaignId();
   const [channelId, setChannelId] = useState<string>("");
 
-  const { data, isLoading } = useQuery({ queryKey: ["dashboard"], queryFn: () => stats() });
+  const { data, isLoading } = useQuery({
+    queryKey: ["dashboard", campaignId],
+    queryFn: () => stats({ data: { campaign_id: campaignId } }),
+  });
   const { data: chans } = useQuery({ queryKey: ["channels"], queryFn: () => channels() });
 
   const run = useMutation({
-    mutationFn: (id: string) => manual({ data: { channel_id: id } }),
-    onSuccess: () => {
-      toast.success("Run complete");
-      qc.invalidateQueries();
-    },
+    mutationFn: (id: string) => manual({ data: { channel_id: id, campaign_id: campaignId } }),
+    onSuccess: () => { toast.success("Run complete"); qc.invalidateQueries(); },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Run failed"),
   });
 
@@ -43,6 +41,8 @@ function DashboardPage() {
   const total = q?.total ?? 0;
   const pct = total ? Math.round((done / total) * 100) : 0;
   const nextSched = data?.schedules?.[0]?.next_run_at;
+  const topMem: Array<{ id: string; category: string; confidence: number; insight: string }> = data?.memory.top ?? [];
+  const recent: Array<{ id: string; run_number: number; status: string; started_at: string; strategy_used: string | null }> = data?.runs.recent ?? [];
 
   return (
     <div className="space-y-6">
@@ -71,21 +71,21 @@ function DashboardPage() {
         <Stat icon={ListVideo} label="Queue Progress" value={`${done}/${total}`} sub={`${pct}% complete`} />
         <Stat icon={Clock} label="Next Scheduled" value={nextSched ? new Date(nextSched).toLocaleString() : "—"} sub={nextSched ? "" : "No schedule active"} />
         <Stat icon={CheckCircle2} label="Success Rate" value={`${data?.runs.successRate ?? 0}%`} sub={`${data?.runs.totalRuns ?? 0} recent runs`} />
-        <Stat icon={Brain} label="Learning Insights" value={`${data?.memory.top.length ?? 0}`} sub="active in memory" />
+        <Stat icon={Brain} label="Learning Insights" value={`${topMem.length}`} sub="active in memory" />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><TrendingUp className="h-4 w-4 text-primary"/>Recent Activity</CardTitle>
-            <CardDescription>Last runs across all channels.</CardDescription>
+            <CardDescription>Last runs in this campaign.</CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? <div className="text-sm text-muted-foreground">Loading…</div> :
-              (data?.runs.recent.length ?? 0) === 0 ?
+              recent.length === 0 ?
                 <div className="text-sm text-muted-foreground">No runs yet. Add videos to the queue, then hit Manual run.</div> :
               <ul className="divide-y divide-border">
-                {(data?.runs.recent ?? []).slice(0, 8).map((r) => (
+                {recent.slice(0, 8).map((r) => (
                   <li key={r.id} className="py-2 flex items-center justify-between text-sm">
                     <div className="flex items-center gap-2">
                       <span className="text-muted-foreground">#{r.run_number}</span>
@@ -105,9 +105,9 @@ function DashboardPage() {
             <CardDescription>Highest-confidence insights guiding new captions.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {(data?.memory.top ?? []).length === 0 ? (
+            {topMem.length === 0 ? (
               <div className="text-sm text-muted-foreground">Memory is empty. Loop will start learning after your first published post has analytics.</div>
-            ) : (data?.memory.top ?? []).map((m) => (
+            ) : topMem.map((m) => (
               <div key={m.id} className="text-sm">
                 <div className="flex items-center gap-2 mb-1">
                   <Badge variant="outline" className="text-[10px] uppercase">{m.category}</Badge>
