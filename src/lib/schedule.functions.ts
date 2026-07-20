@@ -5,6 +5,7 @@ import { z } from "zod";
 const upsertSchema = z.object({
   id: z.string().uuid().optional(),
   channel_id: z.string().uuid(),
+  campaign_id: z.string().uuid().nullable().optional(),
   mode: z.enum(["interval", "daily_times", "manual"]),
   interval_hours: z.number().nullable().optional(),
   daily_times: z.array(z.string()).default([]),
@@ -32,7 +33,7 @@ export const listSchedules = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { data, error } = await context.supabase.from("schedules")
-      .select("id,channel_id,mode,interval_hours,daily_times,next_run_at,last_run_at,active")
+      .select("id,channel_id,campaign_id,mode,interval_hours,daily_times,next_run_at,last_run_at,active,paused")
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
     return data ?? [];
@@ -45,7 +46,7 @@ export const upsertSchedule = createServerFn({ method: "POST" })
     const next_run_at = computeNextRun(data.mode, data.interval_hours, data.daily_times);
     if (data.id) {
       const { error } = await context.supabase.from("schedules").update({
-        channel_id: data.channel_id, mode: data.mode,
+        channel_id: data.channel_id, campaign_id: data.campaign_id ?? null, mode: data.mode,
         interval_hours: data.interval_hours ?? null,
         daily_times: data.daily_times, active: data.active, next_run_at,
       }).eq("id", data.id);
@@ -53,7 +54,7 @@ export const upsertSchedule = createServerFn({ method: "POST" })
       return { id: data.id };
     }
     const { data: row, error } = await context.supabase.from("schedules").insert({
-      user_id: context.userId, channel_id: data.channel_id, mode: data.mode,
+      user_id: context.userId, channel_id: data.channel_id, campaign_id: data.campaign_id ?? null, mode: data.mode,
       interval_hours: data.interval_hours ?? null, daily_times: data.daily_times,
       active: data.active, next_run_at,
     }).select("id").single();
@@ -69,3 +70,14 @@ export const deleteSchedule = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+export const setSchedulePaused = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid(), paused: z.boolean() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase.from("schedules")
+      .update({ paused: data.paused }).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
