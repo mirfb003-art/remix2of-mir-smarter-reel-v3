@@ -109,7 +109,13 @@ function QueuePage() {
               </SelectContent>
             </Select>
             <Button onClick={submit} disabled={addMut.isPending}>Add to queue</Button>
+            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={addMut.isPending}>
+              <Upload className="h-4 w-4 mr-1"/>Import CSV/TXT
+            </Button>
+            <input ref={fileRef} type="file" accept=".csv,.txt,.tsv,text/plain" className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }} />
           </div>
+
         </CardContent>
       </Card>
 
