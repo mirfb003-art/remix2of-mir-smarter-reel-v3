@@ -159,6 +159,7 @@ async function stepAnalyzeVideo(sb: Sb, userId: string, runId: string, url: stri
 
 async function stepGenerateCaption(
   sb: Sb, userId: string, runId: string, apiKey: string, videoSummary: any, captionPrompt: string,
+  strategy: StrategyDecision | null,
 ) {
   const [aiRes, analysisRes, memoryRes] = await Promise.all([
     sb.from("ai_settings").select("*").eq("user_id", userId).maybeSingle(),
@@ -181,6 +182,9 @@ MAX LENGTH: ${ai?.max_caption_length}
 DEFAULT HASHTAGS (may include): ${(ai?.default_hashtags ?? []).join(" ")}
 USER INSTRUCTIONS: ${ai?.user_instructions ?? "(none)"}
 
+STRATEGY (MUST FOLLOW EXACTLY):
+${strategy ? JSON.stringify(strategy, null, 2) : "(no strategy — improvise sensibly)"}
+
 DURABLE LEARNINGS (highest confidence first):
 ${(memory ?? []).map((m) => `- [${m.category}] ${m.insight} (${Math.round(m.confidence*100)}%)`).join("\n") || "(none yet — cold start)"}
 
@@ -188,7 +192,9 @@ RECENT CAPTIONS (avoid repeating structure):
 ${(prevCaps ?? []).map((c) => `- ${c.text}`).join("\n") || "(none)"}
 
 CURRENT VIDEO UNDERSTANDING:
-${JSON.stringify(videoSummary)}`;
+${JSON.stringify(videoSummary)}
+
+Return JSON: { "caption", "hook", "cta", "hashtags": [...], "style_tags": [...] }. The caption's hook, length, cta, emojis, and hashtag count MUST match the STRATEGY.`;
 
   const result = await withRetry("ai",
     async () => generateText({
