@@ -92,7 +92,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="mt-auto p-3 border-t border-sidebar-border">
-          <Button variant="ghost" size="sm" className="w-full justify-start" onClick={signOut}>
+          <Button variant="ghost" size="sm" className="w-full justify-start" onClick={lock}>
             <LogOut className="h-4 w-4 mr-2" /> Sign out
           </Button>
         </div>
