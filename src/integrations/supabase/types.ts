@@ -95,6 +95,51 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_events: {
+        Row: {
+          attempt: number
+          created_at: string
+          duration_ms: number | null
+          error: string | null
+          event_type: string
+          id: string
+          module: string | null
+          payload: Json | null
+          queue_item_id: string | null
+          run_id: string | null
+          status: string | null
+          user_id: string
+        }
+        Insert: {
+          attempt?: number
+          created_at?: string
+          duration_ms?: number | null
+          error?: string | null
+          event_type: string
+          id?: string
+          module?: string | null
+          payload?: Json | null
+          queue_item_id?: string | null
+          run_id?: string | null
+          status?: string | null
+          user_id: string
+        }
+        Update: {
+          attempt?: number
+          created_at?: string
+          duration_ms?: number | null
+          error?: string | null
+          event_type?: string
+          id?: string
+          module?: string | null
+          payload?: Json | null
+          queue_item_id?: string | null
+          run_id?: string | null
+          status?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       buffer_credentials: {
         Row: {
           api_token: string
@@ -184,10 +229,12 @@ export type Database = {
       channels: {
         Row: {
           active: boolean
+          active_run_id: string | null
           buffer_channel_id: string
           created_at: string
           credential_id: string | null
           id: string
+          lock_expires_at: string | null
           name: string
           platform: string
           updated_at: string
@@ -195,10 +242,12 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          active_run_id?: string | null
           buffer_channel_id: string
           created_at?: string
           credential_id?: string | null
           id?: string
+          lock_expires_at?: string | null
           name: string
           platform: string
           updated_at?: string
@@ -206,10 +255,12 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          active_run_id?: string | null
           buffer_channel_id?: string
           created_at?: string
           credential_id?: string | null
           id?: string
+          lock_expires_at?: string | null
           name?: string
           platform?: string
           updated_at?: string
@@ -452,6 +503,45 @@ export type Database = {
         }
         Relationships: []
       }
+      prompt_versions: {
+        Row: {
+          active: boolean
+          caption_prompt: string
+          created_at: string
+          id: string
+          learning_prompt: string
+          name: string
+          notes: string | null
+          user_id: string | null
+          version: number
+          vision_prompt: string
+        }
+        Insert: {
+          active?: boolean
+          caption_prompt: string
+          created_at?: string
+          id?: string
+          learning_prompt: string
+          name: string
+          notes?: string | null
+          user_id?: string | null
+          version: number
+          vision_prompt: string
+        }
+        Update: {
+          active?: boolean
+          caption_prompt?: string
+          created_at?: string
+          id?: string
+          learning_prompt?: string
+          name?: string
+          notes?: string | null
+          user_id?: string | null
+          version?: number
+          vision_prompt?: string
+        }
+        Relationships: []
+      }
       published_posts: {
         Row: {
           buffer_post_id: string | null
@@ -508,49 +598,67 @@ export type Database = {
       }
       runs: {
         Row: {
+          attempts: number
           channel_id: string | null
           created_at: string
+          current_step: string | null
           duration_ms: number | null
           error: string | null
           finished_at: string | null
+          heartbeat_at: string | null
           id: string
+          idempotency_key: string | null
           next_strategy: string | null
+          prompt_version_id: string | null
           queue_item_id: string | null
           run_number: number
           started_at: string
           status: Database["public"]["Enums"]["run_status"]
+          step_state: Json
           strategy_used: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          attempts?: number
           channel_id?: string | null
           created_at?: string
+          current_step?: string | null
           duration_ms?: number | null
           error?: string | null
           finished_at?: string | null
+          heartbeat_at?: string | null
           id?: string
+          idempotency_key?: string | null
           next_strategy?: string | null
+          prompt_version_id?: string | null
           queue_item_id?: string | null
           run_number: number
           started_at?: string
           status?: Database["public"]["Enums"]["run_status"]
+          step_state?: Json
           strategy_used?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          attempts?: number
           channel_id?: string | null
           created_at?: string
+          current_step?: string | null
           duration_ms?: number | null
           error?: string | null
           finished_at?: string | null
+          heartbeat_at?: string | null
           id?: string
+          idempotency_key?: string | null
           next_strategy?: string | null
+          prompt_version_id?: string | null
           queue_item_id?: string | null
           run_number?: number
           started_at?: string
           status?: Database["public"]["Enums"]["run_status"]
+          step_state?: Json
           strategy_used?: string | null
           updated_at?: string
           user_id?: string
@@ -723,8 +831,12 @@ export type Database = {
           attempts: number
           channel_id: string | null
           cloudinary_url: string
+          dead_letter_at: string | null
           error: string | null
           id: string
+          idempotency_key: string | null
+          last_error_module: string | null
+          max_attempts: number
           position: number
           processed_at: string | null
           status: Database["public"]["Enums"]["queue_status"]
@@ -735,8 +847,12 @@ export type Database = {
           attempts?: number
           channel_id?: string | null
           cloudinary_url: string
+          dead_letter_at?: string | null
           error?: string | null
           id?: string
+          idempotency_key?: string | null
+          last_error_module?: string | null
+          max_attempts?: number
           position: number
           processed_at?: string | null
           status?: Database["public"]["Enums"]["queue_status"]
@@ -747,8 +863,12 @@ export type Database = {
           attempts?: number
           channel_id?: string | null
           cloudinary_url?: string
+          dead_letter_at?: string | null
           error?: string | null
           id?: string
+          idempotency_key?: string | null
+          last_error_module?: string | null
+          max_attempts?: number
           position?: number
           processed_at?: string | null
           status?: Database["public"]["Enums"]["queue_status"]
@@ -769,7 +889,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      release_channel_lock: {
+        Args: { _channel_id: string; _run_id: string }
+        Returns: undefined
+      }
+      try_claim_channel_lock: {
+        Args: { _channel_id: string; _run_id: string; _ttl_seconds: number }
+        Returns: boolean
+      }
     }
     Enums: {
       analysis_scope:
@@ -803,7 +930,13 @@ export type Database = {
         | "style"
         | "timing"
         | "other"
-      queue_status: "pending" | "processing" | "done" | "failed" | "skipped"
+      queue_status:
+        | "pending"
+        | "processing"
+        | "done"
+        | "failed"
+        | "skipped"
+        | "dead_letter"
       run_status:
         | "pending"
         | "analyzing"
@@ -812,6 +945,7 @@ export type Database = {
         | "awaiting_analytics"
         | "complete"
         | "failed"
+        | "stale"
       schedule_mode: "interval" | "daily_times" | "manual"
     }
     CompositeTypes: {
@@ -974,7 +1108,14 @@ export const Constants = {
         "timing",
         "other",
       ],
-      queue_status: ["pending", "processing", "done", "failed", "skipped"],
+      queue_status: [
+        "pending",
+        "processing",
+        "done",
+        "failed",
+        "skipped",
+        "dead_letter",
+      ],
       run_status: [
         "pending",
         "analyzing",
@@ -983,6 +1124,7 @@ export const Constants = {
         "awaiting_analytics",
         "complete",
         "failed",
+        "stale",
       ],
       schedule_mode: ["interval", "daily_times", "manual"],
     },
