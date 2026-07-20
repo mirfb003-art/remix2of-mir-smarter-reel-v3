@@ -18,7 +18,7 @@ export const Route = createFileRoute("/api/public/cron/fetch-analytics")({
         // Candidates: posts with a buffer id and no analytics yet.
         const { data: posts, error } = await supabaseAdmin
           .from("published_posts")
-          .select("id,user_id,buffer_post_id,posted_at,channel_id,channels(buffer_credentials(api_token,graphql_endpoint))")
+          .select("id,user_id,run_id,buffer_post_id,posted_at,channel_id,channels(buffer_credentials(api_token,graphql_endpoint))")
           .not("buffer_post_id", "is", null)
           .order("posted_at", { ascending: true })
           .limit(50);
