@@ -103,8 +103,20 @@ function SchedulerSettings() {
                         {s.next_run_at ? ` · next ${new Date(s.next_run_at).toLocaleString()}` : ""}
                       </div>
                     </div>
-                    <Badge variant={s.active ? "default" : "outline"}>{s.active ? "active" : "paused"}</Badge>
+                    <Badge variant={s.paused ? "secondary" : s.active ? "default" : "outline"}>
+                      {s.paused ? "paused" : s.active ? "active" : "off"}
+                    </Badge>
+                    {s.paused ? (
+                      <Button size="icon" variant="ghost" title="Resume" onClick={() => pauseMut.mutate({ id: s.id, paused: false })}>
+                        <Play className="h-4 w-4 text-success"/>
+                      </Button>
+                    ) : (
+                      <Button size="icon" variant="ghost" title="Pause" onClick={() => pauseMut.mutate({ id: s.id, paused: true })}>
+                        <Pause className="h-4 w-4"/>
+                      </Button>
+                    )}
                     <Button size="icon" variant="ghost" onClick={() => delMut.mutate(s.id)}><Trash2 className="h-4 w-4 text-destructive"/></Button>
+
                   </li>
                 );
               })}
