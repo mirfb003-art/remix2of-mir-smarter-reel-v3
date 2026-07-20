@@ -2,33 +2,38 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
-export const listQueue = createServerFn({ method: "GET" })
+export const listQueue = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
+  .inputValidator((d: unknown) => z.object({ campaign_id: z.string().uuid().nullable().optional() }).optional().parse(d))
+  .handler(async ({ data, context }) => {
+    let q = context.supabase
       .from("video_queue")
-      .select("id,position,cloudinary_url,status,attempts,error,added_at,processed_at,channel_id")
+      .select("id,position,cloudinary_url,status,attempts,error,added_at,processed_at,channel_id,campaign_id")
       .order("position", { ascending: true });
+    if (data?.campaign_id) q = q.eq("campaign_id", data.campaign_id);
+    const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
-    return data ?? [];
+    return rows ?? [];
   });
 
 const addSchema = z.object({
   urls: z.array(z.string().url()).min(1),
   channel_id: z.string().uuid().nullable().optional(),
+  campaign_id: z.string().uuid().nullable().optional(),
 });
 export const addToQueue = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => addSchema.parse(d))
   .handler(async ({ data, context }) => {
-    // Dedupe: drop URLs that already exist (any status) for this user.
-    const { data: existing } = await context.supabase
+    // Dedupe: drop URLs that already exist (any status) for this user in this campaign scope.
+    let dupQ = context.supabase
       .from("video_queue")
       .select("cloudinary_url")
       .eq("user_id", context.userId)
       .in("cloudinary_url", data.urls);
+    if (data.campaign_id) dupQ = dupQ.eq("campaign_id", data.campaign_id);
+    const { data: existing } = await dupQ;
     const seen = new Set((existing ?? []).map((r) => r.cloudinary_url));
-    // Also dedupe within the incoming batch.
     const fresh: string[] = [];
     const batch = new Set<string>();
     for (const u of data.urls) {
@@ -49,12 +54,14 @@ export const addToQueue = createServerFn({ method: "POST" })
       user_id: context.userId,
       cloudinary_url: u,
       channel_id: data.channel_id ?? null,
+      campaign_id: data.campaign_id ?? null,
       position: start + i,
     }));
     const { error } = await context.supabase.from("video_queue").insert(rows);
     if (error) throw new Error(error.message);
     return { added: rows.length, skipped: data.urls.length - rows.length };
   });
+
 
 export const removeFromQueue = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
