@@ -1,0 +1,178 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { listCampaigns, upsertCampaign, setCampaignStatus, deleteCampaign } from "@/lib/campaigns.functions";
+import { setActiveCampaignId, useActiveCampaignId } from "@/lib/active-campaign";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { toast } from "sonner";
+import { useState } from "react";
+import { Play, Pause, Square, Trash2, Plus, CircleCheck } from "lucide-react";
+
+export const Route = createFileRoute("/_authenticated/campaigns")({ component: CampaignsPage });
+
+const OBJECTIVES = [
+  { v: "followers", l: "Followers growth" },
+  { v: "likes", l: "Likes" },
+  { v: "comments", l: "Comments" },
+  { v: "saves", l: "Saves" },
+  { v: "shares", l: "Shares" },
+  { v: "reach", l: "Reach" },
+  { v: "watch_time", l: "Watch time" },
+  { v: "ctr", l: "Click-through" },
+  { v: "engagement", l: "Overall engagement" },
+  { v: "custom", l: "Custom" },
+];
+
+function CampaignsPage() {
+  const list = useServerFn(listCampaigns);
+  const upsert = useServerFn(upsertCampaign);
+  const setStatus = useServerFn(setCampaignStatus);
+  const del = useServerFn(deleteCampaign);
+  const qc = useQueryClient();
+  const activeId = useActiveCampaignId();
+
+  const { data: campaigns } = useQuery({ queryKey: ["campaigns"], queryFn: () => list() });
+
+  const [name, setName] = useState("");
+  const [desc, setDesc] = useState("");
+  const [objective, setObjective] = useState("engagement");
+  const [customObj, setCustomObj] = useState("");
+  const [shareLearning, setShareLearning] = useState(false);
+
+  const create = useMutation({
+    mutationFn: () => upsert({ data: {
+      name, description: desc || null, objective,
+      custom_objective: objective === "custom" ? customObj : null,
+      share_learning: shareLearning,
+    } }),
+    onSuccess: (r) => {
+      toast.success("Campaign created");
+      setName(""); setDesc(""); setCustomObj("");
+      setActiveCampaignId(r.id);
+      qc.invalidateQueries({ queryKey: ["campaigns"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+
+  const statusMut = useMutation({
+    mutationFn: (p: { id: string; status: "active" | "paused" | "stopped" }) => setStatus({ data: p }),
+    onSuccess: () => { toast.success("Updated"); qc.invalidateQueries(); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+  const delMut = useMutation({
+    mutationFn: (id: string) => del({ data: { id } }),
+    onSuccess: () => { toast.success("Deleted"); qc.invalidateQueries(); },
+  });
+
+  return (
+    <div className="space-y-6 max-w-4xl">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Campaigns</h1>
+        <p className="text-sm text-muted-foreground">
+          A campaign is a fully isolated publishing context — queue, schedule, memory, and learning are scoped to it.
+        </p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><Plus className="h-4 w-4"/>New campaign</CardTitle>
+          <CardDescription>Give it a niche name, pick an objective, and press Create.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-1 md:col-span-2"><Label>Name</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Fitness Reels — August"/>
+          </div>
+          <div className="space-y-1 md:col-span-2"><Label>Description (optional)</Label>
+            <Textarea rows={2} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Niche, audience, tone…" />
+          </div>
+          <div className="space-y-1"><Label>Objective</Label>
+            <Select value={objective} onValueChange={setObjective}>
+              <SelectTrigger><SelectValue/></SelectTrigger>
+              <SelectContent>
+                {OBJECTIVES.map((o) => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          {objective === "custom" && (
+            <div className="space-y-1"><Label>Custom objective</Label>
+              <Input value={customObj} onChange={(e) => setCustomObj(e.target.value)} placeholder="Describe the goal" />
+            </div>
+          )}
+          <div className="flex items-center gap-3 md:col-span-2 pt-2">
+            <Switch id="sl" checked={shareLearning} onCheckedChange={setShareLearning}/>
+            <Label htmlFor="sl" className="text-sm font-normal">Share learning across all campaigns (default: isolated)</Label>
+          </div>
+          <div className="md:col-span-2">
+            <Button onClick={() => create.mutate()} disabled={!name.trim() || create.isPending}>
+              Create campaign
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>All campaigns ({campaigns?.length ?? 0})</CardTitle>
+          <CardDescription>The active campaign at top-left scopes queue, sheet, dashboard and manual runs.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!campaigns?.length ? (
+            <div className="text-sm text-muted-foreground">No campaigns yet. Create one above to start.</div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {campaigns.map((c) => {
+                const isActive = c.id === activeId;
+                return (
+                  <li key={c.id} className="py-3 flex items-center gap-3 text-sm flex-wrap">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium flex items-center gap-2">
+                        {c.name}
+                        {isActive && <Badge variant="outline" className="text-[10px]"><CircleCheck className="h-3 w-3 mr-1"/>current</Badge>}
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        Objective: {c.custom_objective || c.objective} · {c.share_learning ? "Shared learning" : "Isolated learning"}
+                        {c.description ? ` · ${c.description}` : ""}
+                      </div>
+                    </div>
+                    <Badge variant={c.status === "active" ? "default" : c.status === "paused" ? "secondary" : "destructive"} className="capitalize">
+                      {c.status}
+                    </Badge>
+                    {!isActive && (
+                      <Button size="sm" variant="outline" onClick={() => setActiveCampaignId(c.id)}>Switch to</Button>
+                    )}
+                    {c.status !== "active" ? (
+                      <Button size="icon" variant="ghost" title="Resume" onClick={() => statusMut.mutate({ id: c.id, status: "active" })}>
+                        <Play className="h-4 w-4 text-success"/>
+                      </Button>
+                    ) : (
+                      <Button size="icon" variant="ghost" title="Pause" onClick={() => statusMut.mutate({ id: c.id, status: "paused" })}>
+                        <Pause className="h-4 w-4"/>
+                      </Button>
+                    )}
+                    {c.status !== "stopped" && (
+                      <Button size="icon" variant="ghost" title="Stop" onClick={() => statusMut.mutate({ id: c.id, status: "stopped" })}>
+                        <Square className="h-4 w-4 text-destructive"/>
+                      </Button>
+                    )}
+                    <Button size="icon" variant="ghost" title="Delete" onClick={() => {
+                      if (confirm(`Delete campaign "${c.name}"? All queue/runs/memory scoped to it will be removed.`)) delMut.mutate(c.id);
+                    }}>
+                      <Trash2 className="h-4 w-4 text-destructive"/>
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
