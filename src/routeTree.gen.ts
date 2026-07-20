@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedSheetRouteImport } from './routes/_authenticated/sheet'
 import { Route as AuthenticatedQueueRouteImport } from './routes/_authenticated/queue'
 import { Route as AuthenticatedLearningRouteImport } from './routes/_authenticated/learning'
+import { Route as AuthenticatedInsightsRouteImport } from './routes/_authenticated/insights'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
 import { Route as AuthenticatedSettingsSchedulerRouteImport } from './routes/_authenticated/settings/scheduler'
@@ -53,6 +54,11 @@ const AuthenticatedQueueRoute = AuthenticatedQueueRouteImport.update({
 const AuthenticatedLearningRoute = AuthenticatedLearningRouteImport.update({
   id: '/learning',
   path: '/learning',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedInsightsRoute = AuthenticatedInsightsRouteImport.update({
+  id: '/insights',
+  path: '/insights',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
@@ -117,6 +123,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/insights': typeof AuthenticatedInsightsRoute
   '/learning': typeof AuthenticatedLearningRoute
   '/queue': typeof AuthenticatedQueueRoute
   '/sheet': typeof AuthenticatedSheetRoute
@@ -134,6 +141,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/insights': typeof AuthenticatedInsightsRoute
   '/learning': typeof AuthenticatedLearningRoute
   '/queue': typeof AuthenticatedQueueRoute
   '/sheet': typeof AuthenticatedSheetRoute
@@ -153,6 +161,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/insights': typeof AuthenticatedInsightsRoute
   '/_authenticated/learning': typeof AuthenticatedLearningRoute
   '/_authenticated/queue': typeof AuthenticatedQueueRoute
   '/_authenticated/sheet': typeof AuthenticatedSheetRoute
@@ -172,6 +181,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/dashboard'
+    | '/insights'
     | '/learning'
     | '/queue'
     | '/sheet'
@@ -189,6 +199,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/dashboard'
+    | '/insights'
     | '/learning'
     | '/queue'
     | '/sheet'
@@ -207,6 +218,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/dashboard'
+    | '/_authenticated/insights'
     | '/_authenticated/learning'
     | '/_authenticated/queue'
     | '/_authenticated/sheet'
@@ -272,6 +284,13 @@ declare module '@tanstack/react-router' {
       path: '/learning'
       fullPath: '/learning'
       preLoaderRoute: typeof AuthenticatedLearningRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/insights': {
+      id: '/_authenticated/insights'
+      path: '/insights'
+      fullPath: '/insights'
+      preLoaderRoute: typeof AuthenticatedInsightsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/dashboard': {
@@ -349,6 +368,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedInsightsRoute: typeof AuthenticatedInsightsRoute
   AuthenticatedLearningRoute: typeof AuthenticatedLearningRoute
   AuthenticatedQueueRoute: typeof AuthenticatedQueueRoute
   AuthenticatedSheetRoute: typeof AuthenticatedSheetRoute
@@ -362,6 +382,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedInsightsRoute: AuthenticatedInsightsRoute,
   AuthenticatedLearningRoute: AuthenticatedLearningRoute,
   AuthenticatedQueueRoute: AuthenticatedQueueRoute,
   AuthenticatedSheetRoute: AuthenticatedSheetRoute,
