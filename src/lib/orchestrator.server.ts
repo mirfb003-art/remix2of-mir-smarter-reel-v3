@@ -324,6 +324,7 @@ export async function runOrchestrator({
     const promptVer = await getActivePromptVersion(sb, userId);
     const { data: run, error: runErr } = await sb.from("runs").insert({
       user_id: userId, channel_id: channelId, queue_item_id: qItem.id,
+      campaign_id: campaignId,
       run_number: nextNum, status: "analyzing",
       idempotency_key: idemKey,
       current_step: "analyze_previous",
@@ -335,6 +336,7 @@ export async function runOrchestrator({
     if (runErr || !run) throw new Error(runErr?.message ?? "Failed to create run");
     runId = run.id;
   }
+
 
   // ----- Acquire channel lock -----
   const gotLock = await acquireChannelLock(sb, channelId, runId);
