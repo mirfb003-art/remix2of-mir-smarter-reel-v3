@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { supabase } from "@/integrations/supabase/client";
 import {
-  LayoutDashboard, ListVideo, Table2, Brain, Settings, LogOut, Sparkles,
+  LayoutDashboard, ListVideo, Table2, Brain, LogOut, Sparkles,
   Cable, Wand2, Search, Clock, SlidersHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+
+const UNLOCK_KEY = "loop:unlocked";
 
 const nav = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -27,8 +28,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
 
-  async function signOut() {
-    await supabase.auth.signOut();
+  function lock() {
+    if (typeof window !== "undefined") window.localStorage.removeItem(UNLOCK_KEY);
     navigate({ to: "/auth" });
   }
 
@@ -91,7 +92,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="mt-auto p-3 border-t border-sidebar-border">
-          <Button variant="ghost" size="sm" className="w-full justify-start" onClick={signOut}>
+          <Button variant="ghost" size="sm" className="w-full justify-start" onClick={lock}>
             <LogOut className="h-4 w-4 mr-2" /> Sign out
           </Button>
         </div>
