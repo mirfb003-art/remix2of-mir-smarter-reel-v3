@@ -275,15 +275,19 @@ export async function runOrchestrator({
   }
 
 
-  // ----- Claim next pending queue item -----
-  const { data: qItem, error: qErr } = await sb.from("video_queue")
-    .select("id, cloudinary_url, attempts, max_attempts, idempotency_key")
+  // ----- Claim next pending queue item (optionally scoped to a campaign) -----
+  let qQuery = sb.from("video_queue")
+    .select("id, cloudinary_url, attempts, max_attempts, idempotency_key, campaign_id")
     .eq("user_id", userId)
     .eq("status", "pending")
     .order("position", { ascending: true })
-    .limit(1).maybeSingle();
+    .limit(1);
+  if (campaignIdOverride) qQuery = qQuery.eq("campaign_id", campaignIdOverride);
+  const { data: qItem, error: qErr } = await qQuery.maybeSingle();
   if (qErr) throw new Error(qErr.message);
   if (!qItem) throw new Error("Queue is empty. Add Cloudinary URLs first.");
+  const campaignId = campaignIdOverride ?? (qItem as any).campaign_id ?? null;
+
 
   // ----- Idempotency: if a run already exists for this queue item, reuse it -----
   const idemKey = qItem.idempotency_key ?? makeIdempotencyKey([qItem.id, channelId]);
