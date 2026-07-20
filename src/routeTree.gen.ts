@@ -23,6 +23,7 @@ import { Route as AuthenticatedSettingsBufferRouteImport } from './routes/_authe
 import { Route as AuthenticatedSettingsAnalysisRouteImport } from './routes/_authenticated/settings/analysis'
 import { Route as AuthenticatedSettingsAiRouteImport } from './routes/_authenticated/settings/ai'
 import { Route as ApiPublicCronTickRouteImport } from './routes/api/public/cron/tick'
+import { Route as ApiPublicCronRecoverStaleRouteImport } from './routes/api/public/cron/recover-stale'
 import { Route as ApiPublicCronFetchAnalyticsRouteImport } from './routes/api/public/cron/fetch-analytics'
 
 const AuthRoute = AuthRouteImport.update({
@@ -99,6 +100,12 @@ const ApiPublicCronTickRoute = ApiPublicCronTickRouteImport.update({
   path: '/api/public/cron/tick',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicCronRecoverStaleRoute =
+  ApiPublicCronRecoverStaleRouteImport.update({
+    id: '/api/public/cron/recover-stale',
+    path: '/api/public/cron/recover-stale',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicCronFetchAnalyticsRoute =
   ApiPublicCronFetchAnalyticsRouteImport.update({
     id: '/api/public/cron/fetch-analytics',
@@ -120,6 +127,7 @@ export interface FileRoutesByFullPath {
   '/settings/scheduler': typeof AuthenticatedSettingsSchedulerRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
   '/api/public/cron/fetch-analytics': typeof ApiPublicCronFetchAnalyticsRoute
+  '/api/public/cron/recover-stale': typeof ApiPublicCronRecoverStaleRoute
   '/api/public/cron/tick': typeof ApiPublicCronTickRoute
 }
 export interface FileRoutesByTo {
@@ -136,6 +144,7 @@ export interface FileRoutesByTo {
   '/settings/scheduler': typeof AuthenticatedSettingsSchedulerRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
   '/api/public/cron/fetch-analytics': typeof ApiPublicCronFetchAnalyticsRoute
+  '/api/public/cron/recover-stale': typeof ApiPublicCronRecoverStaleRoute
   '/api/public/cron/tick': typeof ApiPublicCronTickRoute
 }
 export interface FileRoutesById {
@@ -154,6 +163,7 @@ export interface FileRoutesById {
   '/_authenticated/settings/scheduler': typeof AuthenticatedSettingsSchedulerRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
   '/api/public/cron/fetch-analytics': typeof ApiPublicCronFetchAnalyticsRoute
+  '/api/public/cron/recover-stale': typeof ApiPublicCronRecoverStaleRoute
   '/api/public/cron/tick': typeof ApiPublicCronTickRoute
 }
 export interface FileRouteTypes {
@@ -172,6 +182,7 @@ export interface FileRouteTypes {
     | '/settings/scheduler'
     | '/settings/'
     | '/api/public/cron/fetch-analytics'
+    | '/api/public/cron/recover-stale'
     | '/api/public/cron/tick'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -188,6 +199,7 @@ export interface FileRouteTypes {
     | '/settings/scheduler'
     | '/settings'
     | '/api/public/cron/fetch-analytics'
+    | '/api/public/cron/recover-stale'
     | '/api/public/cron/tick'
   id:
     | '__root__'
@@ -205,6 +217,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings/scheduler'
     | '/_authenticated/settings/'
     | '/api/public/cron/fetch-analytics'
+    | '/api/public/cron/recover-stale'
     | '/api/public/cron/tick'
   fileRoutesById: FileRoutesById
 }
@@ -213,6 +226,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   ApiPublicCronFetchAnalyticsRoute: typeof ApiPublicCronFetchAnalyticsRoute
+  ApiPublicCronRecoverStaleRoute: typeof ApiPublicCronRecoverStaleRoute
   ApiPublicCronTickRoute: typeof ApiPublicCronTickRoute
 }
 
@@ -316,6 +330,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCronTickRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/cron/recover-stale': {
+      id: '/api/public/cron/recover-stale'
+      path: '/api/public/cron/recover-stale'
+      fullPath: '/api/public/cron/recover-stale'
+      preLoaderRoute: typeof ApiPublicCronRecoverStaleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/cron/fetch-analytics': {
       id: '/api/public/cron/fetch-analytics'
       path: '/api/public/cron/fetch-analytics'
@@ -360,6 +381,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   ApiPublicCronFetchAnalyticsRoute: ApiPublicCronFetchAnalyticsRoute,
+  ApiPublicCronRecoverStaleRoute: ApiPublicCronRecoverStaleRoute,
   ApiPublicCronTickRoute: ApiPublicCronTickRoute,
 }
 export const routeTree = rootRouteImport

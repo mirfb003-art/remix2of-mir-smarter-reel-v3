@@ -2,14 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
-import { listQueue, addToQueue, removeFromQueue, resetQueueItem, moveQueueItem } from "@/lib/queue.functions";
+import { listQueue, addToQueue, removeFromQueue, resetQueueItem, moveQueueItem, listDeadLetters, retryDeadLetter } from "@/lib/queue.functions";
 import { listChannels } from "@/lib/channels.functions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Trash2, RotateCcw, Plus, ListVideo, ArrowUp, ArrowDown } from "lucide-react";
+import { Trash2, RotateCcw, Plus, ListVideo, ArrowUp, ArrowDown, AlertTriangle, RefreshCw } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export const Route = createFileRoute("/_authenticated/queue")({ component: QueuePage });
@@ -21,6 +21,8 @@ function QueuePage() {
   const reset = useServerFn(resetQueueItem);
   const move = useServerFn(moveQueueItem);
   const chans = useServerFn(listChannels);
+  const dead = useServerFn(listDeadLetters);
+  const retryDl = useServerFn(retryDeadLetter);
   const qc = useQueryClient();
 
   const [text, setText] = useState("");
@@ -28,6 +30,7 @@ function QueuePage() {
 
   const { data: items } = useQuery({ queryKey: ["queue"], queryFn: () => list() });
   const { data: channels } = useQuery({ queryKey: ["channels"], queryFn: () => chans() });
+  const { data: deadItems } = useQuery({ queryKey: ["dead-letters"], queryFn: () => dead() });
 
   const addMut = useMutation({
     mutationFn: (urls: string[]) => add({ data: { urls, channel_id: channelId || null } }),
@@ -45,6 +48,15 @@ function QueuePage() {
   const moveMut = useMutation({
     mutationFn: ({ id, direction }: { id: string; direction: "up" | "down" }) => move({ data: { id, direction } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["queue"] }),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+  const retryDlMut = useMutation({
+    mutationFn: (id: string) => retryDl({ data: { id } }),
+    onSuccess: () => {
+      toast.success("Requeued for retry");
+      qc.invalidateQueries({ queryKey: ["dead-letters"] });
+      qc.invalidateQueries({ queryKey: ["queue"] });
+    },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
@@ -115,6 +127,37 @@ function QueuePage() {
                       <RotateCcw className="h-4 w-4" />
                     </Button>
                   )}
+                  <Button size="icon" variant="ghost" onClick={() => rmMut.mutate(it.id)} title="Remove">
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-destructive"/>Dead letter ({deadItems?.length ?? 0})
+          </CardTitle>
+          <CardDescription>Items that failed more than their max attempts. Nothing was published — retry to send them back to pending.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!deadItems?.length ? (
+            <div className="text-sm text-muted-foreground">No failed items. 🎉</div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {deadItems.map((it) => (
+                <li key={it.id} className="py-3 flex items-center gap-3">
+                  <Badge variant="destructive">{it.last_error_module ?? "error"}</Badge>
+                  <span className="font-mono text-xs truncate flex-1 text-muted-foreground">{it.cloudinary_url}</span>
+                  <span className="text-xs text-muted-foreground">{it.attempts}/{it.max_attempts} tries</span>
+                  {it.error && <span className="text-xs text-destructive truncate max-w-[240px]" title={it.error}>{it.error}</span>}
+                  <Button size="sm" variant="outline" onClick={() => retryDlMut.mutate(it.id)}>
+                    <RefreshCw className="h-3 w-3 mr-1" /> Retry
+                  </Button>
                   <Button size="icon" variant="ghost" onClick={() => rmMut.mutate(it.id)} title="Remove">
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
