@@ -8,15 +8,20 @@ import {
   refreshHeartbeat, getActivePromptVersion, makeIdempotencyKey,
 } from "./reliability.server";
 
+import { decideStrategy, type StrategyDecision } from "./strategy-engine.server";
+import { predictMetrics, computeBaseline } from "./prediction-engine.server";
+
 type Sb = SupabaseClient;
 
 // Ordered step list. Runs resume from the first step whose output is missing.
-type Step = "analyze_previous" | "analyze_video" | "generate_caption" | "publish" | "finalize";
-const STEP_ORDER: Step[] = ["analyze_previous", "analyze_video", "generate_caption", "publish", "finalize"];
+type Step = "analyze_previous" | "analyze_video" | "strategy" | "predict" | "generate_caption" | "publish" | "finalize";
+const STEP_ORDER: Step[] = ["analyze_previous", "analyze_video", "strategy", "predict", "generate_caption", "publish", "finalize"];
 
 interface StepState {
   analyze_previous?: { done: boolean; report?: unknown };
   analyze_video?: { done: boolean; summary?: any };
+  strategy?: { done: boolean; decision?: StrategyDecision; strategyId?: string };
+  predict?: { done: boolean; predictionId?: string };
   generate_caption?: { done: boolean; caption?: any };
   publish?: { done: boolean; postId?: string; postedAt?: string };
   finalize?: { done: boolean };
@@ -154,6 +159,7 @@ async function stepAnalyzeVideo(sb: Sb, userId: string, runId: string, url: stri
 
 async function stepGenerateCaption(
   sb: Sb, userId: string, runId: string, apiKey: string, videoSummary: any, captionPrompt: string,
+  strategy: StrategyDecision | null,
 ) {
   const [aiRes, analysisRes, memoryRes] = await Promise.all([
     sb.from("ai_settings").select("*").eq("user_id", userId).maybeSingle(),
@@ -176,6 +182,9 @@ MAX LENGTH: ${ai?.max_caption_length}
 DEFAULT HASHTAGS (may include): ${(ai?.default_hashtags ?? []).join(" ")}
 USER INSTRUCTIONS: ${ai?.user_instructions ?? "(none)"}
 
+STRATEGY (MUST FOLLOW EXACTLY):
+${strategy ? JSON.stringify(strategy, null, 2) : "(no strategy — improvise sensibly)"}
+
 DURABLE LEARNINGS (highest confidence first):
 ${(memory ?? []).map((m) => `- [${m.category}] ${m.insight} (${Math.round(m.confidence*100)}%)`).join("\n") || "(none yet — cold start)"}
 
@@ -183,7 +192,9 @@ RECENT CAPTIONS (avoid repeating structure):
 ${(prevCaps ?? []).map((c) => `- ${c.text}`).join("\n") || "(none)"}
 
 CURRENT VIDEO UNDERSTANDING:
-${JSON.stringify(videoSummary)}`;
+${JSON.stringify(videoSummary)}
+
+Return JSON: { "caption", "hook", "cta", "hashtags": [...], "style_tags": [...] }. The caption's hook, length, cta, emojis, and hashtag count MUST match the STRATEGY.`;
 
   const result = await withRetry("ai",
     async () => generateText({
@@ -387,14 +398,48 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
       await refreshHeartbeat(sb, runId, channelId);
       const summary = await stepAnalyzeVideo(sb, userId, runId, queueUrl, apiKey, model, promptVer.vision_prompt);
       state.analyze_video = { done: true, summary };
+      await persistStepState(sb, runId, state, "strategy");
+    }
+
+    // Step: strategy — decide structured direction before writing anything.
+    if (!state.strategy?.done) {
+      await refreshHeartbeat(sb, runId, channelId);
+      const objective = aiSet?.objective ?? "engagement";
+      const [memRes, trendRes, reportsRes] = await Promise.all([
+        sb.from("memory_insights").select("category,insight,confidence").eq("user_id", userId).eq("active", true).order("confidence", { ascending: false }).limit(15),
+        sb.from("insight_trends").select("dimension,value,metric,lift_pct,human_summary").eq("user_id", userId).order("confidence", { ascending: false }).limit(12),
+        sb.from("learning_reports").select("worked,cause,change_recommendation").eq("user_id", userId).order("created_at", { ascending: false }).limit(3),
+      ]);
+      const { decision, strategyId } = await decideStrategy({
+        sb, userId, runId, apiKey, model, objective,
+        videoSummary: state.analyze_video!.summary,
+        memoryTop: memRes.data ?? [],
+        trends: trendRes.data ?? [],
+        recentReports: reportsRes.data ?? [],
+      });
+      state.strategy = { done: true, decision, strategyId };
+      await persistStepState(sb, runId, state, "predict");
+    }
+
+    // Step: predict — forecast metrics before publishing so we can score later.
+    if (!state.predict?.done) {
+      await refreshHeartbeat(sb, runId, channelId);
+      const baseline = await computeBaseline(sb, userId);
+      const { predictionId } = await predictMetrics({
+        sb, userId, runId, apiKey, model,
+        strategy: state.strategy!.decision,
+        videoSummary: state.analyze_video!.summary,
+        baseline,
+      });
+      state.predict = { done: true, predictionId };
       await persistStepState(sb, runId, state, "generate_caption");
     }
 
-    // Step: generate caption
+    // Step: generate caption (strategy-directed)
     if (!state.generate_caption?.done) {
       await sb.from("runs").update({ status: "generating" }).eq("id", runId);
       await refreshHeartbeat(sb, runId, channelId);
-      const caption = await stepGenerateCaption(sb, userId, runId, apiKey, state.analyze_video!.summary, promptVer.caption_prompt);
+      const caption = await stepGenerateCaption(sb, userId, runId, apiKey, state.analyze_video!.summary, promptVer.caption_prompt, state.strategy?.decision ?? null);
       state.generate_caption = { done: true, caption };
       await persistStepState(sb, runId, state, "publish");
     }

@@ -276,6 +276,51 @@ export type Database = {
           },
         ]
       }
+      insight_trends: {
+        Row: {
+          baseline: number | null
+          confidence: number | null
+          dimension: string
+          human_summary: string | null
+          id: string
+          last_computed_at: string
+          lift_pct: number | null
+          metric: string
+          observed: number | null
+          sample_size: number | null
+          user_id: string
+          value: string
+        }
+        Insert: {
+          baseline?: number | null
+          confidence?: number | null
+          dimension: string
+          human_summary?: string | null
+          id?: string
+          last_computed_at?: string
+          lift_pct?: number | null
+          metric: string
+          observed?: number | null
+          sample_size?: number | null
+          user_id: string
+          value: string
+        }
+        Update: {
+          baseline?: number | null
+          confidence?: number | null
+          dimension?: string
+          human_summary?: string | null
+          id?: string
+          last_computed_at?: string
+          lift_pct?: number | null
+          metric?: string
+          observed?: number | null
+          sample_size?: number | null
+          user_id?: string
+          value?: string
+        }
+        Relationships: []
+      }
       learning_reports: {
         Row: {
           cause: string | null
@@ -287,8 +332,11 @@ export type Database = {
           hook_verdict: string | null
           id: string
           length_verdict: string | null
+          objective_score: number | null
+          prediction_delta: Json | null
           raw: Json | null
           run_id: string
+          time_of_day_verdict: string | null
           user_id: string
           worked: boolean | null
         }
@@ -302,8 +350,11 @@ export type Database = {
           hook_verdict?: string | null
           id?: string
           length_verdict?: string | null
+          objective_score?: number | null
+          prediction_delta?: Json | null
           raw?: Json | null
           run_id: string
+          time_of_day_verdict?: string | null
           user_id: string
           worked?: boolean | null
         }
@@ -317,8 +368,11 @@ export type Database = {
           hook_verdict?: string | null
           id?: string
           length_verdict?: string | null
+          objective_score?: number | null
+          prediction_delta?: Json | null
           raw?: Json | null
           run_id?: string
+          time_of_day_verdict?: string | null
           user_id?: string
           worked?: boolean | null
         }
@@ -376,6 +430,7 @@ export type Database = {
       memory_insights: {
         Row: {
           active: boolean
+          applicable_topics: string[] | null
           category: Database["public"]["Enums"]["insight_category"]
           channel_id: string | null
           confidence: number
@@ -384,12 +439,16 @@ export type Database = {
           id: string
           insight: string
           last_reinforced_at: string
+          last_success_at: string | null
+          platform: string | null
           support_count: number
+          supporting_run_ids: string[] | null
           updated_at: string
           user_id: string
         }
         Insert: {
           active?: boolean
+          applicable_topics?: string[] | null
           category: Database["public"]["Enums"]["insight_category"]
           channel_id?: string | null
           confidence?: number
@@ -398,12 +457,16 @@ export type Database = {
           id?: string
           insight: string
           last_reinforced_at?: string
+          last_success_at?: string | null
+          platform?: string | null
           support_count?: number
+          supporting_run_ids?: string[] | null
           updated_at?: string
           user_id: string
         }
         Update: {
           active?: boolean
+          applicable_topics?: string[] | null
           category?: Database["public"]["Enums"]["insight_category"]
           channel_id?: string | null
           confidence?: number
@@ -412,7 +475,10 @@ export type Database = {
           id?: string
           insight?: string
           last_reinforced_at?: string
+          last_success_at?: string | null
+          platform?: string | null
           support_count?: number
+          supporting_run_ids?: string[] | null
           updated_at?: string
           user_id?: string
         }
@@ -475,6 +541,86 @@ export type Database = {
             columns: ["published_post_id"]
             isOneToOne: false
             referencedRelation: "published_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      predictions: {
+        Row: {
+          accuracy_score: number | null
+          actual_comments: number | null
+          actual_likes: number | null
+          actual_reach: number | null
+          actual_saves: number | null
+          actual_shares: number | null
+          actual_views: number | null
+          confidence: number | null
+          created_at: string
+          evaluated_at: string | null
+          id: string
+          predicted_comments: number | null
+          predicted_likes: number | null
+          predicted_reach: number | null
+          predicted_saves: number | null
+          predicted_shares: number | null
+          predicted_views: number | null
+          rationale: string | null
+          raw: Json | null
+          run_id: string | null
+          user_id: string
+        }
+        Insert: {
+          accuracy_score?: number | null
+          actual_comments?: number | null
+          actual_likes?: number | null
+          actual_reach?: number | null
+          actual_saves?: number | null
+          actual_shares?: number | null
+          actual_views?: number | null
+          confidence?: number | null
+          created_at?: string
+          evaluated_at?: string | null
+          id?: string
+          predicted_comments?: number | null
+          predicted_likes?: number | null
+          predicted_reach?: number | null
+          predicted_saves?: number | null
+          predicted_shares?: number | null
+          predicted_views?: number | null
+          rationale?: string | null
+          raw?: Json | null
+          run_id?: string | null
+          user_id: string
+        }
+        Update: {
+          accuracy_score?: number | null
+          actual_comments?: number | null
+          actual_likes?: number | null
+          actual_reach?: number | null
+          actual_saves?: number | null
+          actual_shares?: number | null
+          actual_views?: number | null
+          confidence?: number | null
+          created_at?: string
+          evaluated_at?: string | null
+          id?: string
+          predicted_comments?: number | null
+          predicted_likes?: number | null
+          predicted_reach?: number | null
+          predicted_saves?: number | null
+          predicted_shares?: number | null
+          predicted_views?: number | null
+          rationale?: string | null
+          raw?: Json | null
+          run_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "predictions_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
             referencedColumns: ["id"]
           },
         ]
@@ -609,12 +755,14 @@ export type Database = {
           id: string
           idempotency_key: string | null
           next_strategy: string | null
+          prediction_id: string | null
           prompt_version_id: string | null
           queue_item_id: string | null
           run_number: number
           started_at: string
           status: Database["public"]["Enums"]["run_status"]
           step_state: Json
+          strategy_id: string | null
           strategy_used: string | null
           updated_at: string
           user_id: string
@@ -631,12 +779,14 @@ export type Database = {
           id?: string
           idempotency_key?: string | null
           next_strategy?: string | null
+          prediction_id?: string | null
           prompt_version_id?: string | null
           queue_item_id?: string | null
           run_number: number
           started_at?: string
           status?: Database["public"]["Enums"]["run_status"]
           step_state?: Json
+          strategy_id?: string | null
           strategy_used?: string | null
           updated_at?: string
           user_id: string
@@ -653,12 +803,14 @@ export type Database = {
           id?: string
           idempotency_key?: string | null
           next_strategy?: string | null
+          prediction_id?: string | null
           prompt_version_id?: string | null
           queue_item_id?: string | null
           run_number?: number
           started_at?: string
           status?: Database["public"]["Enums"]["run_status"]
           step_state?: Json
+          strategy_id?: string | null
           strategy_used?: string | null
           updated_at?: string
           user_id?: string
@@ -672,10 +824,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "runs_prediction_id_fkey"
+            columns: ["prediction_id"]
+            isOneToOne: false
+            referencedRelation: "predictions"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "runs_queue_item_id_fkey"
             columns: ["queue_item_id"]
             isOneToOne: false
             referencedRelation: "video_queue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "runs_strategy_id_fkey"
+            columns: ["strategy_id"]
+            isOneToOne: false
+            referencedRelation: "strategies"
             referencedColumns: ["id"]
           },
         ]
@@ -765,6 +931,74 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      strategies: {
+        Row: {
+          caption_length: string | null
+          created_at: string
+          cta_type: string | null
+          education_level: string | null
+          emoji_level: string | null
+          hashtag_count: number | null
+          hook_style: string | null
+          id: string
+          memory_refs: string[] | null
+          objective: string | null
+          posting_time_hint: string | null
+          raw: Json | null
+          reasoning: string | null
+          run_id: string | null
+          storytelling: boolean | null
+          tone: string | null
+          user_id: string
+        }
+        Insert: {
+          caption_length?: string | null
+          created_at?: string
+          cta_type?: string | null
+          education_level?: string | null
+          emoji_level?: string | null
+          hashtag_count?: number | null
+          hook_style?: string | null
+          id?: string
+          memory_refs?: string[] | null
+          objective?: string | null
+          posting_time_hint?: string | null
+          raw?: Json | null
+          reasoning?: string | null
+          run_id?: string | null
+          storytelling?: boolean | null
+          tone?: string | null
+          user_id: string
+        }
+        Update: {
+          caption_length?: string | null
+          created_at?: string
+          cta_type?: string | null
+          education_level?: string | null
+          emoji_level?: string | null
+          hashtag_count?: number | null
+          hook_style?: string | null
+          id?: string
+          memory_refs?: string[] | null
+          objective?: string | null
+          posting_time_hint?: string | null
+          raw?: Json | null
+          reasoning?: string | null
+          run_id?: string | null
+          storytelling?: boolean | null
+          tone?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "strategies_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       video_analyses: {
         Row: {
