@@ -136,6 +136,37 @@ function QueuePage() {
           )}
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-destructive"/>Dead letter ({deadItems?.length ?? 0})
+          </CardTitle>
+          <CardDescription>Items that failed more than their max attempts. Nothing was published — retry to send them back to pending.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!deadItems?.length ? (
+            <div className="text-sm text-muted-foreground">No failed items. 🎉</div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {deadItems.map((it) => (
+                <li key={it.id} className="py-3 flex items-center gap-3">
+                  <Badge variant="destructive">{it.last_error_module ?? "error"}</Badge>
+                  <span className="font-mono text-xs truncate flex-1 text-muted-foreground">{it.cloudinary_url}</span>
+                  <span className="text-xs text-muted-foreground">{it.attempts}/{it.max_attempts} tries</span>
+                  {it.error && <span className="text-xs text-destructive truncate max-w-[240px]" title={it.error}>{it.error}</span>}
+                  <Button size="sm" variant="outline" onClick={() => retryDlMut.mutate(it.id)}>
+                    <RefreshCw className="h-3 w-3 mr-1" /> Retry
+                  </Button>
+                  <Button size="icon" variant="ghost" onClick={() => rmMut.mutate(it.id)} title="Remove">
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
