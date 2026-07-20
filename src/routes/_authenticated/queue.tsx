@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Trash2, RotateCcw, Plus, ListVideo, ArrowUp, ArrowDown } from "lucide-react";
+import { Trash2, RotateCcw, Plus, ListVideo, ArrowUp, ArrowDown, AlertTriangle, RefreshCw } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export const Route = createFileRoute("/_authenticated/queue")({ component: QueuePage });
