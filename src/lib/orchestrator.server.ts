@@ -1,13 +1,28 @@
-// Orchestrator: runs the full learning loop for one video.
-// Called from manualRun and the cron tick.
+// Orchestrator: adaptive learning loop for one video.
+// Step-based state machine — resumes from last completed step on retry.
 import { generateText } from "ai";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAiGateway, requireLovableApiKey } from "./ai-gateway.server";
+import {
+  withRetry, audit, acquireChannelLock, releaseChannelLock,
+  refreshHeartbeat, getActivePromptVersion, makeIdempotencyKey,
+} from "./reliability.server";
 
 type Sb = SupabaseClient;
 
-function cloudinaryThumb(url: string, offset: string = "auto"): string {
-  // Insert transformation after /upload/ and change extension to jpg
+// Ordered step list. Runs resume from the first step whose output is missing.
+type Step = "analyze_previous" | "analyze_video" | "generate_caption" | "publish" | "finalize";
+const STEP_ORDER: Step[] = ["analyze_previous", "analyze_video", "generate_caption", "publish", "finalize"];
+
+interface StepState {
+  analyze_previous?: { done: boolean; report?: unknown };
+  analyze_video?: { done: boolean; summary?: any };
+  generate_caption?: { done: boolean; caption?: any };
+  publish?: { done: boolean; postId?: string; postedAt?: string };
+  finalize?: { done: boolean };
+}
+
+function cloudinaryThumb(url: string, offset = "auto"): string {
   const m = url.match(/^(.*\/upload\/)(.*)$/);
   if (!m) return url;
   const rest = m[2].replace(/\.[a-zA-Z0-9]+$/, ".jpg");
@@ -18,69 +33,44 @@ async function log(sb: Sb, userId: string, runId: string | null, level: string, 
   await sb.from("logs").insert({ user_id: userId, run_id: runId, level, module, message, meta: (meta ?? null) as never });
 }
 
-async function analyzeVideo(sb: Sb, userId: string, runId: string, url: string, apiKey: string, model: string) {
-  const provider = createAiGateway(apiKey);
-  const frames = ["auto", "25%", "50%", "75%"].map((o) => cloudinaryThumb(url, o));
-  const { text } = await generateText({
-    model: provider(model),
-    messages: [{
-      role: "user",
-      content: [
-        { type: "text", text: `Analyze this short-form video (frames sampled below). Return STRICT JSON only, no prose, matching this shape:
-{"summary":string,"objects":string[],"people":string,"scene":string,"actions":string[],"emotions":string[],"topic":string,"story":string,"message":string}` },
-        ...frames.map((u) => ({ type: "image" as const, image: u })),
-      ],
-    }],
-  });
-  let parsed: Record<string, unknown> = {};
-  try {
-    const clean = text.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
-    parsed = JSON.parse(clean);
-  } catch {
-    parsed = { summary: text.slice(0, 500) };
-  }
-  await sb.from("video_analyses").insert({
-    run_id: runId, user_id: userId,
-    summary: String(parsed.summary ?? ""),
-    objects: (parsed.objects as string[]) ?? [],
-    people: (parsed.people as string) ?? null,
-    scene: (parsed.scene as string) ?? null,
-    actions: (parsed.actions as string[]) ?? [],
-    emotions: (parsed.emotions as string[]) ?? [],
-    topic: (parsed.topic as string) ?? null,
-    story: (parsed.story as string) ?? null,
-    message: (parsed.message as string) ?? null,
-    raw: parsed as never,
-  });
-  return parsed;
+async function persistStepState(sb: Sb, runId: string, state: StepState, currentStep: string) {
+  await sb.from("runs").update({
+    step_state: state as never,
+    current_step: currentStep,
+    heartbeat_at: new Date().toISOString(),
+  }).eq("id", runId);
 }
 
-async function analyzePrevious(sb: Sb, userId: string, runId: string, apiKey: string, model: string) {
-  // Fetch last completed run with analytics
+// -------- Step implementations --------
+
+async function stepAnalyzePrevious(sb: Sb, userId: string, runId: string, apiKey: string, model: string, learningPrompt: string) {
   const { data: prev } = await sb.from("runs")
     .select(`id, captions(text,hashtags,cta,hook,length),
       published_posts(post_analytics(views,likes,comments,shares,saves,reach,impressions))`)
-    .eq("user_id", userId)
-    .eq("status", "complete")
-    .neq("id", runId)
-    .order("started_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .eq("user_id", userId).eq("status", "complete").neq("id", runId)
+    .order("started_at", { ascending: false }).limit(1).maybeSingle();
   if (!prev) return null;
-
   const cap = (prev as any).captions?.[0];
   const analytics = (prev as any).published_posts?.[0]?.post_analytics?.[0];
   if (!cap) return null;
 
   const provider = createAiGateway(apiKey);
-  const { text } = await generateText({
-    model: provider(model),
-    prompt: `You are a social-media performance analyst. Given the previous post's caption and metrics, produce STRICT JSON only:
-{"worked":boolean,"hook_verdict":string,"length_verdict":string,"emoji_verdict":string,"hashtag_verdict":string,"cta_verdict":string,"cause":string,"change_recommendation":string,"new_insights":[{"category":"hook|length|emoji|hashtag|cta|topic|style|timing","insight":string,"confidence":number}]}
-
-Previous caption: ${JSON.stringify(cap)}
-Analytics: ${JSON.stringify(analytics ?? {})}`,
-  });
+  const t0 = Date.now();
+  const result = await withRetry("ai",
+    async () => generateText({
+      model: provider(model),
+      prompt: `${learningPrompt}\n\nPrevious caption: ${JSON.stringify(cap)}\nAnalytics: ${JSON.stringify(analytics ?? {})}`,
+    }),
+    async (attempt, err, durationMs) => {
+      await audit(sb, {
+        userId, runId, eventType: err ? "ai.retry" : "ai.response",
+        module: "ai", attempt, status: err ? "error" : "success", durationMs,
+        error: err instanceof Error ? err.message : err ? String(err) : null,
+        payload: { purpose: "learning_report", model },
+      });
+    },
+  );
+  const text = result.text;
   let report: any = {};
   try { report = JSON.parse(text.replace(/^```json\s*/i,"").replace(/```$/,"").trim()); } catch { report = { cause: text.slice(0,300) }; }
 
@@ -97,7 +87,6 @@ Analytics: ${JSON.stringify(analytics ?? {})}`,
     raw: report,
   });
 
-  // Reinforce memory
   const insights = (report.new_insights ?? []) as Array<{ category: string; insight: string; confidence: number }>;
   for (const ins of insights) {
     const { data: existing } = await sb.from("memory_insights").select("id,support_count,confidence")
@@ -115,10 +104,57 @@ Analytics: ${JSON.stringify(analytics ?? {})}`,
       });
     }
   }
+  await audit(sb, { userId, runId, eventType: "learning.report_saved", module: "orchestrator", status: "success", durationMs: Date.now() - t0 });
   return report;
 }
 
-async function generateCaption(sb: Sb, userId: string, apiKey: string, videoSummary: any) {
+async function stepAnalyzeVideo(sb: Sb, userId: string, runId: string, url: string, apiKey: string, model: string, visionPrompt: string) {
+  const provider = createAiGateway(apiKey);
+  const frames = ["auto", "25%", "50%", "75%"].map((o) => cloudinaryThumb(url, o));
+  const result = await withRetry("ai",
+    async () => generateText({
+      model: provider(model),
+      messages: [{
+        role: "user",
+        content: [
+          { type: "text", text: visionPrompt },
+          ...frames.map((u) => ({ type: "image" as const, image: u })),
+        ],
+      }],
+    }),
+    async (attempt, err, durationMs) => {
+      await audit(sb, {
+        userId, runId, eventType: err ? "ai.retry" : "ai.response",
+        module: "ai", attempt, status: err ? "error" : "success", durationMs,
+        error: err instanceof Error ? err.message : err ? String(err) : null,
+        payload: { purpose: "vision", model },
+      });
+    },
+  );
+  const text = result.text;
+  let parsed: Record<string, unknown> = {};
+  try { parsed = JSON.parse(text.replace(/^```json\s*/i,"").replace(/```$/i,"").trim()); }
+  catch { parsed = { summary: text.slice(0, 500) }; }
+
+  await sb.from("video_analyses").insert({
+    run_id: runId, user_id: userId,
+    summary: String(parsed.summary ?? ""),
+    objects: (parsed.objects as string[]) ?? [],
+    people: (parsed.people as string) ?? null,
+    scene: (parsed.scene as string) ?? null,
+    actions: (parsed.actions as string[]) ?? [],
+    emotions: (parsed.emotions as string[]) ?? [],
+    topic: (parsed.topic as string) ?? null,
+    story: (parsed.story as string) ?? null,
+    message: (parsed.message as string) ?? null,
+    raw: parsed as never,
+  });
+  return parsed;
+}
+
+async function stepGenerateCaption(
+  sb: Sb, userId: string, runId: string, apiKey: string, videoSummary: any, captionPrompt: string,
+) {
   const [aiRes, analysisRes, memoryRes] = await Promise.all([
     sb.from("ai_settings").select("*").eq("user_id", userId).maybeSingle(),
     sb.from("analysis_settings").select("*").eq("user_id", userId).maybeSingle(),
@@ -129,13 +165,9 @@ async function generateCaption(sb: Sb, userId: string, apiKey: string, videoSumm
   const memory = memoryRes.data;
   const { data: prevCaps } = await sb.from("captions").select("text,hashtags").order("created_at", { ascending: false }).limit(analysisSet?.n_value ?? 5);
 
-
   const objective = ai?.objective === "custom" ? (ai?.custom_objective ?? "engagement") : (ai?.objective ?? "engagement");
   const provider = createAiGateway(apiKey);
-  const { text } = await generateText({
-    model: provider(ai?.model ?? "google/gemini-3-flash-preview"),
-    temperature: ai?.temperature ?? 0.8,
-    prompt: `You are Loop, an adaptive short-form caption engine.
+  const prompt = `${captionPrompt}
 
 OBJECTIVE: Maximize ${objective}
 BRAND TONE: ${ai?.brand_tone}
@@ -151,103 +183,290 @@ RECENT CAPTIONS (avoid repeating structure):
 ${(prevCaps ?? []).map((c) => `- ${c.text}`).join("\n") || "(none)"}
 
 CURRENT VIDEO UNDERSTANDING:
-${JSON.stringify(videoSummary)}
+${JSON.stringify(videoSummary)}`;
 
-Return STRICT JSON only:
-{"caption":string,"hook":string,"cta":string,"hashtags":string[],"style_tags":string[]}`,
-  });
+  const result = await withRetry("ai",
+    async () => generateText({
+      model: provider(ai?.model ?? "google/gemini-3-flash-preview"),
+      temperature: ai?.temperature ?? 0.8,
+      prompt,
+    }),
+    async (attempt, err, durationMs) => {
+      await audit(sb, {
+        userId, runId, eventType: err ? "ai.retry" : "ai.response",
+        module: "ai", attempt, status: err ? "error" : "success", durationMs,
+        error: err instanceof Error ? err.message : err ? String(err) : null,
+        payload: { purpose: "caption", model: ai?.model },
+      });
+    },
+  );
   let out: any = {};
-  try { out = JSON.parse(text.replace(/^```json\s*/i,"").replace(/```$/,"").trim()); } catch { out = { caption: text.slice(0, ai?.max_caption_length ?? 2200) }; }
-  return { ai_settings: ai, caption: out };
+  try { out = JSON.parse(result.text.replace(/^```json\s*/i,"").replace(/```$/,"").trim()); }
+  catch { out = { caption: result.text.slice(0, ai?.max_caption_length ?? 2200) }; }
+
+  await sb.from("captions").insert({
+    run_id: runId, user_id: userId,
+    text: String(out.caption ?? ""),
+    hook: out.hook ?? null,
+    cta: out.cta ?? null,
+    hashtags: out.hashtags ?? [],
+    length: String(out.caption ?? "").length,
+    style_tags: out.style_tags ?? [],
+  });
+  return out;
 }
 
+async function stepPublish(
+  sb: Sb, userId: string, runId: string, channel: any, caption: any, videoUrl: string,
+) {
+  const cred = channel.buffer_credentials;
+  const { makeBufferClient } = await import("./buffer.server");
+  const buffer = makeBufferClient(cred.api_token, cred.graphql_endpoint);
+
+  const t0 = Date.now();
+  const published = await withRetry("buffer",
+    async () => buffer.createPost({
+      channelId: channel.buffer_channel_id,
+      text: caption.caption,
+      mediaUrl: videoUrl,
+    }),
+    async (attempt, err, durationMs) => {
+      await audit(sb, {
+        userId, runId, eventType: err ? "publish.retry" : "publish.response",
+        module: "buffer", attempt, status: err ? "error" : "success", durationMs,
+        error: err instanceof Error ? err.message : err ? String(err) : null,
+      });
+    },
+  );
+
+  const postedAt = new Date().toISOString();
+  await sb.from("published_posts").insert({
+    run_id: runId, user_id: userId, channel_id: channel.id,
+    buffer_post_id: published.postId, platform: channel.platform,
+    posted_at: postedAt, raw: published.raw as never,
+  });
+  await audit(sb, { userId, runId, eventType: "publish.saved", module: "orchestrator", status: "success", durationMs: Date.now() - t0, payload: { post_id: published.postId } });
+  return { postId: published.postId, postedAt };
+}
+
+// -------- Main entry --------
+
 export async function runOrchestrator({
-  supabase: sb, userId, channelId,
-}: { supabase: Sb; userId: string; channelId: string }) {
-  // 1. Claim next queue item
-  const { data: qItem, error: qErr } = await sb
-    .from("video_queue")
-    .select("id, cloudinary_url")
+  supabase: sb, userId, channelId, resumeRunId,
+}: { supabase: Sb; userId: string; channelId: string; resumeRunId?: string }) {
+
+  // ----- Resume path -----
+  if (resumeRunId) {
+    const { data: existing } = await sb.from("runs").select("*, channels(*, buffer_credentials(*))").eq("id", resumeRunId).maybeSingle();
+    if (!existing) throw new Error("Run to resume not found");
+    if (existing.status === "complete") return { runId: resumeRunId, resumed: true, alreadyComplete: true };
+    return await executeSteps(sb, userId, existing as any, (existing as any).channels, existing.step_state as StepState);
+  }
+
+  // ----- Claim next pending queue item -----
+  const { data: qItem, error: qErr } = await sb.from("video_queue")
+    .select("id, cloudinary_url, attempts, max_attempts, idempotency_key")
+    .eq("user_id", userId)
     .eq("status", "pending")
     .order("position", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+    .limit(1).maybeSingle();
   if (qErr) throw new Error(qErr.message);
   if (!qItem) throw new Error("Queue is empty. Add Cloudinary URLs first.");
 
-  await sb.from("video_queue").update({ status: "processing" }).eq("id", qItem.id);
+  // ----- Idempotency: if a run already exists for this queue item, reuse it -----
+  const idemKey = qItem.idempotency_key ?? makeIdempotencyKey([qItem.id, channelId]);
+  if (!qItem.idempotency_key) {
+    await sb.from("video_queue").update({ idempotency_key: idemKey }).eq("id", qItem.id);
+  }
+  const { data: existingRun } = await sb.from("runs")
+    .select("*, channels(*, buffer_credentials(*))")
+    .eq("user_id", userId).eq("idempotency_key", idemKey)
+    .maybeSingle();
+  if (existingRun && existingRun.status !== "failed" && existingRun.status !== "stale") {
+    if (existingRun.status === "complete") return { runId: existingRun.id, alreadyComplete: true };
+    // In-flight — refuse to double-publish.
+    throw new Error(`Run ${existingRun.id} already in-flight for this queue item (${existingRun.status})`);
+  }
 
-  // 2. Get channel + credentials
-  const { data: channel } = await sb.from("channels").select("*,buffer_credentials(*)").eq("id", channelId).maybeSingle();
+  // ----- Get channel + credentials -----
+  const { data: channel } = await sb.from("channels")
+    .select("*, buffer_credentials(*)").eq("id", channelId).maybeSingle();
   if (!channel) throw new Error("Channel not found");
-  const cred = (channel as any).buffer_credentials;
-  if (!cred) throw new Error("This channel has no Buffer credential attached.");
+  if (!(channel as any).buffer_credentials) throw new Error("This channel has no Buffer credential attached.");
 
-  // 3. Create run
-  const { data: lastRun } = await sb.from("runs").select("run_number").eq("user_id", userId).order("run_number", { ascending: false }).limit(1).maybeSingle();
-  const nextNum = (lastRun?.run_number ?? 0) + 1;
-  const { data: run, error: runErr } = await sb.from("runs").insert({
-    user_id: userId, channel_id: channelId, queue_item_id: qItem.id,
-    run_number: nextNum, status: "analyzing",
-  }).select("*").single();
-  if (runErr || !run) throw new Error(runErr?.message ?? "Failed to create run");
+  // ----- Create or reuse run row -----
+  let runId: string;
+  if (existingRun) {
+    runId = existingRun.id;
+    await sb.from("runs").update({
+      status: "analyzing", error: null, attempts: (existingRun.attempts ?? 0) + 1,
+      heartbeat_at: new Date().toISOString(),
+    }).eq("id", runId);
+  } else {
+    const { data: lastRun } = await sb.from("runs").select("run_number").eq("user_id", userId).order("run_number", { ascending: false }).limit(1).maybeSingle();
+    const nextNum = (lastRun?.run_number ?? 0) + 1;
+    const promptVer = await getActivePromptVersion(sb, userId);
+    const { data: run, error: runErr } = await sb.from("runs").insert({
+      user_id: userId, channel_id: channelId, queue_item_id: qItem.id,
+      run_number: nextNum, status: "analyzing",
+      idempotency_key: idemKey,
+      current_step: "analyze_previous",
+      step_state: {} as never,
+      heartbeat_at: new Date().toISOString(),
+      attempts: 1,
+      prompt_version_id: promptVer.id,
+    }).select("*").single();
+    if (runErr || !run) throw new Error(runErr?.message ?? "Failed to create run");
+    runId = run.id;
+  }
 
+  // ----- Acquire channel lock -----
+  const gotLock = await acquireChannelLock(sb, channelId, runId);
+  if (!gotLock) {
+    await sb.from("runs").update({ status: "failed", error: "Channel locked by another in-flight run", finished_at: new Date().toISOString() }).eq("id", runId);
+    await audit(sb, { userId, runId, eventType: "lock.denied", module: "orchestrator", status: "error" });
+    throw new Error("Channel is already being processed by another run.");
+  }
+  await audit(sb, { userId, runId, eventType: "lock.acquired", module: "orchestrator", status: "success", payload: { channel_id: channelId } });
+
+  // ----- Mark queue item processing (increment attempts) -----
+  await sb.from("video_queue").update({
+    status: "processing",
+    attempts: (qItem.attempts ?? 0) + 1,
+  }).eq("id", qItem.id);
+  await audit(sb, { userId, runId, queueItemId: qItem.id, eventType: "queue.claimed", module: "orchestrator", status: "success", attempt: (qItem.attempts ?? 0) + 1 });
+
+  const { data: freshRun } = await sb.from("runs").select("*").eq("id", runId).maybeSingle();
+  const initialState = (freshRun?.step_state as StepState) ?? {};
+  (freshRun as any).queue_item_id = qItem.id;
+  (freshRun as any).queue_url = qItem.cloudinary_url;
+  return await executeSteps(sb, userId, freshRun as any, channel, initialState);
+}
+
+async function executeSteps(sb: Sb, userId: string, run: any, channel: any, state: StepState) {
+  const runId = run.id;
+  const channelId = channel.id;
   const t0 = Date.now();
   const apiKey = requireLovableApiKey();
-  const { data: aiSet } = await sb.from("ai_settings").select("model").eq("user_id", userId).maybeSingle();
+  const { data: aiSet } = await sb.from("ai_settings").select("model,objective").eq("user_id", userId).maybeSingle();
   const model = aiSet?.model ?? "google/gemini-3-flash-preview";
 
+  // Load queue item info if not already on run row.
+  let queueItemId: string | undefined = run.queue_item_id;
+  let queueUrl: string | undefined = run.queue_url;
+  if (!queueUrl && queueItemId) {
+    const { data: q } = await sb.from("video_queue").select("cloudinary_url").eq("id", queueItemId).maybeSingle();
+    queueUrl = q?.cloudinary_url;
+  }
+  if (!queueUrl) throw new Error("Queue URL missing for run");
+
+  // Load prompt version bound to this run (falls back to active).
+  let promptVer;
+  if (run.prompt_version_id) {
+    const { data } = await sb.from("prompt_versions")
+      .select("id,name,version,vision_prompt,learning_prompt,caption_prompt")
+      .eq("id", run.prompt_version_id).maybeSingle();
+    promptVer = data;
+  }
+  if (!promptVer) promptVer = await getActivePromptVersion(sb, userId);
+
   try {
-    await log(sb, userId, run.id, "info", "orchestrator", `Run #${nextNum} started for ${qItem.cloudinary_url}`);
+    await log(sb, userId, runId, "info", "orchestrator", `Run started/resumed at step ${run.current_step ?? "analyze_previous"}`);
 
-    // Phase 2: learn from previous
-    await analyzePrevious(sb, userId, run.id, apiKey, model);
+    // Step: analyze previous
+    if (!state.analyze_previous?.done) {
+      await persistStepState(sb, runId, state, "analyze_previous");
+      await refreshHeartbeat(sb, runId, channelId);
+      const report = await stepAnalyzePrevious(sb, userId, runId, apiKey, model, promptVer.learning_prompt);
+      state.analyze_previous = { done: true, report };
+      await persistStepState(sb, runId, state, "analyze_video");
+    }
 
-    // Analyze current video
-    const summary = await analyzeVideo(sb, userId, run.id, qItem.cloudinary_url, apiKey, model);
+    // Step: analyze video
+    if (!state.analyze_video?.done) {
+      await refreshHeartbeat(sb, runId, channelId);
+      const summary = await stepAnalyzeVideo(sb, userId, runId, queueUrl, apiKey, model, promptVer.vision_prompt);
+      state.analyze_video = { done: true, summary };
+      await persistStepState(sb, runId, state, "generate_caption");
+    }
 
-    // Generate caption
-    await sb.from("runs").update({ status: "generating" }).eq("id", run.id);
-    const { caption } = await generateCaption(sb, userId, apiKey, summary);
-    await sb.from("captions").insert({
-      run_id: run.id, user_id: userId,
-      text: String(caption.caption ?? ""),
-      hook: caption.hook ?? null,
-      cta: caption.cta ?? null,
-      hashtags: caption.hashtags ?? [],
-      length: String(caption.caption ?? "").length,
-      style_tags: caption.style_tags ?? [],
-    });
+    // Step: generate caption
+    if (!state.generate_caption?.done) {
+      await sb.from("runs").update({ status: "generating" }).eq("id", runId);
+      await refreshHeartbeat(sb, runId, channelId);
+      const caption = await stepGenerateCaption(sb, userId, runId, apiKey, state.analyze_video!.summary, promptVer.caption_prompt);
+      state.generate_caption = { done: true, caption };
+      await persistStepState(sb, runId, state, "publish");
+    }
 
-    // Publish
-    await sb.from("runs").update({ status: "publishing" }).eq("id", run.id);
-    const { makeBufferClient } = await import("./buffer.server");
-    const buffer = makeBufferClient(cred.api_token, cred.graphql_endpoint);
-    const { postId, raw } = await buffer.createPost({
-      channelId: channel.buffer_channel_id,
-      text: caption.caption,
-      mediaUrl: qItem.cloudinary_url,
-    });
+    // Step: publish
+    if (!state.publish?.done) {
+      await sb.from("runs").update({ status: "publishing" }).eq("id", runId);
+      await refreshHeartbeat(sb, runId, channelId);
+      const pub = await stepPublish(sb, userId, runId, channel, state.generate_caption!.caption, queueUrl);
+      state.publish = { done: true, postId: pub.postId, postedAt: pub.postedAt };
+      await persistStepState(sb, runId, state, "finalize");
+    }
 
-    await sb.from("published_posts").insert({
-      run_id: run.id, user_id: userId, channel_id: channelId,
-      buffer_post_id: postId, platform: channel.platform,
-      posted_at: new Date().toISOString(), raw: raw as never,
-    });
-
-    await sb.from("video_queue").update({ status: "done", processed_at: new Date().toISOString() }).eq("id", qItem.id);
+    // Step: finalize
+    if (queueItemId) {
+      await sb.from("video_queue").update({
+        status: "done", processed_at: new Date().toISOString(), error: null,
+      }).eq("id", queueItemId);
+    }
     await sb.from("runs").update({
       status: "complete", finished_at: new Date().toISOString(),
-      duration_ms: Date.now() - t0, strategy_used: `objective=${(aiSet as any)?.objective ?? "engagement"}`,
-    }).eq("id", run.id);
-    await log(sb, userId, run.id, "info", "orchestrator", `Run #${nextNum} complete`);
-
-    return { runId: run.id, postId };
+      duration_ms: Date.now() - t0,
+      strategy_used: `objective=${aiSet?.objective ?? "engagement"};prompt=${promptVer.name}-v${promptVer.version}`,
+      current_step: "complete",
+      step_state: { ...state, finalize: { done: true } } as never,
+    }).eq("id", runId);
+    await releaseChannelLock(sb, channelId, runId);
+    await audit(sb, { userId, runId, eventType: "run.completed", module: "orchestrator", status: "success", durationMs: Date.now() - t0, payload: { post_id: state.publish?.postId } });
+    await log(sb, userId, runId, "info", "orchestrator", `Run complete`);
+    return { runId, postId: state.publish?.postId };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    await sb.from("runs").update({ status: "failed", error: msg, finished_at: new Date().toISOString(), duration_ms: Date.now() - t0 }).eq("id", run.id);
-    await sb.from("video_queue").update({ status: "failed", error: msg, attempts: 1 }).eq("id", qItem.id);
-    await log(sb, userId, run.id, "error", "orchestrator", msg);
+    await sb.from("runs").update({
+      status: "failed", error: msg,
+      finished_at: new Date().toISOString(),
+      duration_ms: Date.now() - t0,
+      step_state: state as never,
+    }).eq("id", runId);
+
+    // Dead-letter or requeue based on max_attempts.
+    if (queueItemId) {
+      const { data: q } = await sb.from("video_queue").select("attempts, max_attempts").eq("id", queueItemId).maybeSingle();
+      const attempts = q?.attempts ?? 1;
+      const maxAttempts = q?.max_attempts ?? 3;
+      if (attempts >= maxAttempts) {
+        await sb.from("video_queue").update({
+          status: "dead_letter",
+          dead_letter_at: new Date().toISOString(),
+          error: msg,
+          last_error_module: classifyErrorModule(msg),
+        }).eq("id", queueItemId);
+        await audit(sb, { userId, runId, queueItemId, eventType: "queue.dead_letter", module: "orchestrator", status: "error", error: msg, attempt: attempts });
+      } else {
+        // Return item to pending so scheduler can retry (resume-aware).
+        await sb.from("video_queue").update({
+          status: "pending", error: msg,
+          last_error_module: classifyErrorModule(msg),
+        }).eq("id", queueItemId);
+        await audit(sb, { userId, runId, queueItemId, eventType: "queue.requeued", module: "orchestrator", status: "error", error: msg, attempt: attempts });
+      }
+    }
+
+    await releaseChannelLock(sb, channelId, runId);
+    await log(sb, userId, runId, "error", "orchestrator", msg);
     throw e;
   }
+}
+
+function classifyErrorModule(msg: string): string {
+  const s = msg.toLowerCase();
+  if (s.includes("ai") || s.includes("model") || s.includes("gemini") || s.includes("gateway")) return "ai";
+  if (s.includes("buffer") || s.includes("graphql") || s.includes("publish")) return "buffer";
+  if (s.includes("cloudinary") || s.includes("upload")) return "cloudinary";
+  return "orchestrator";
 }
