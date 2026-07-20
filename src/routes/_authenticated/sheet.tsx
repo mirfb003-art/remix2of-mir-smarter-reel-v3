@@ -105,7 +105,8 @@ function download(name: string, mime: string, data: string | Blob) {
 
 function SheetPage() {
   const fn = useServerFn(listRuns);
-  const { data } = useQuery({ queryKey: ["runs"], queryFn: () => fn(), refetchInterval: 15000 });
+  const campaignId = useActiveCampaignId();
+  const { data } = useQuery({ queryKey: ["runs", campaignId], queryFn: () => fn({ data: { campaign_id: campaignId } }), refetchInterval: 15000 });
   const rows = useMemo(() => flatten(data ?? []), [data]);
   const [q, setQ] = useState("");
   const [page, setPage] = useState(0);
