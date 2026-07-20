@@ -21,8 +21,10 @@ function SchedulerSettings() {
   const list = useServerFn(listSchedules);
   const upsert = useServerFn(upsertSchedule);
   const del = useServerFn(deleteSchedule);
+  const pauseFn = useServerFn(setSchedulePaused);
   const chansFn = useServerFn(listChannels);
   const qc = useQueryClient();
+  const campaignId = useActiveCampaignId();
 
   const { data } = useQuery({ queryKey: ["schedules"], queryFn: () => list() });
   const { data: chans } = useQuery({ queryKey: ["channels"], queryFn: () => chansFn() });
@@ -34,7 +36,7 @@ function SchedulerSettings() {
 
   const mut = useMutation({
     mutationFn: () => upsert({ data: {
-      channel_id: channelId, mode,
+      channel_id: channelId, campaign_id: campaignId, mode,
       interval_hours: mode === "interval" ? interval : null,
       daily_times: mode === "daily_times" ? times.split(",").map(s => s.trim()).filter(Boolean) : [],
       active: true,
@@ -43,6 +45,11 @@ function SchedulerSettings() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
   const delMut = useMutation({ mutationFn: (id: string) => del({ data: { id } }), onSuccess: () => qc.invalidateQueries({ queryKey: ["schedules"] }) });
+  const pauseMut = useMutation({
+    mutationFn: (p: { id: string; paused: boolean }) => pauseFn({ data: p }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["schedules"] }),
+  });
+
 
   return (
     <div className="space-y-6 max-w-3xl">
