@@ -23,6 +23,7 @@ import { Route as AuthenticatedSettingsBufferRouteImport } from './routes/_authe
 import { Route as AuthenticatedSettingsAnalysisRouteImport } from './routes/_authenticated/settings/analysis'
 import { Route as AuthenticatedSettingsAiRouteImport } from './routes/_authenticated/settings/ai'
 import { Route as ApiPublicCronTickRouteImport } from './routes/api/public/cron/tick'
+import { Route as ApiPublicCronFetchAnalyticsRouteImport } from './routes/api/public/cron/fetch-analytics'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -98,6 +99,12 @@ const ApiPublicCronTickRoute = ApiPublicCronTickRouteImport.update({
   path: '/api/public/cron/tick',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicCronFetchAnalyticsRoute =
+  ApiPublicCronFetchAnalyticsRouteImport.update({
+    id: '/api/public/cron/fetch-analytics',
+    path: '/api/public/cron/fetch-analytics',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -112,6 +119,7 @@ export interface FileRoutesByFullPath {
   '/settings/general': typeof AuthenticatedSettingsGeneralRoute
   '/settings/scheduler': typeof AuthenticatedSettingsSchedulerRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
+  '/api/public/cron/fetch-analytics': typeof ApiPublicCronFetchAnalyticsRoute
   '/api/public/cron/tick': typeof ApiPublicCronTickRoute
 }
 export interface FileRoutesByTo {
@@ -127,6 +135,7 @@ export interface FileRoutesByTo {
   '/settings/general': typeof AuthenticatedSettingsGeneralRoute
   '/settings/scheduler': typeof AuthenticatedSettingsSchedulerRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
+  '/api/public/cron/fetch-analytics': typeof ApiPublicCronFetchAnalyticsRoute
   '/api/public/cron/tick': typeof ApiPublicCronTickRoute
 }
 export interface FileRoutesById {
@@ -144,6 +153,7 @@ export interface FileRoutesById {
   '/_authenticated/settings/general': typeof AuthenticatedSettingsGeneralRoute
   '/_authenticated/settings/scheduler': typeof AuthenticatedSettingsSchedulerRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
+  '/api/public/cron/fetch-analytics': typeof ApiPublicCronFetchAnalyticsRoute
   '/api/public/cron/tick': typeof ApiPublicCronTickRoute
 }
 export interface FileRouteTypes {
@@ -161,6 +171,7 @@ export interface FileRouteTypes {
     | '/settings/general'
     | '/settings/scheduler'
     | '/settings/'
+    | '/api/public/cron/fetch-analytics'
     | '/api/public/cron/tick'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -176,6 +187,7 @@ export interface FileRouteTypes {
     | '/settings/general'
     | '/settings/scheduler'
     | '/settings'
+    | '/api/public/cron/fetch-analytics'
     | '/api/public/cron/tick'
   id:
     | '__root__'
@@ -192,6 +204,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings/general'
     | '/_authenticated/settings/scheduler'
     | '/_authenticated/settings/'
+    | '/api/public/cron/fetch-analytics'
     | '/api/public/cron/tick'
   fileRoutesById: FileRoutesById
 }
@@ -199,6 +212,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiPublicCronFetchAnalyticsRoute: typeof ApiPublicCronFetchAnalyticsRoute
   ApiPublicCronTickRoute: typeof ApiPublicCronTickRoute
 }
 
@@ -302,6 +316,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCronTickRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/cron/fetch-analytics': {
+      id: '/api/public/cron/fetch-analytics'
+      path: '/api/public/cron/fetch-analytics'
+      fullPath: '/api/public/cron/fetch-analytics'
+      preLoaderRoute: typeof ApiPublicCronFetchAnalyticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -338,6 +359,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiPublicCronFetchAnalyticsRoute: ApiPublicCronFetchAnalyticsRoute,
   ApiPublicCronTickRoute: ApiPublicCronTickRoute,
 }
 export const routeTree = rootRouteImport

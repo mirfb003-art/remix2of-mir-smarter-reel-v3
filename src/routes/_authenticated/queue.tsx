@@ -2,14 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
-import { listQueue, addToQueue, removeFromQueue, resetQueueItem } from "@/lib/queue.functions";
+import { listQueue, addToQueue, removeFromQueue, resetQueueItem, moveQueueItem } from "@/lib/queue.functions";
 import { listChannels } from "@/lib/channels.functions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Trash2, RotateCcw, Plus, ListVideo } from "lucide-react";
+import { Trash2, RotateCcw, Plus, ListVideo, ArrowUp, ArrowDown } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export const Route = createFileRoute("/_authenticated/queue")({ component: QueuePage });
@@ -19,6 +19,7 @@ function QueuePage() {
   const add = useServerFn(addToQueue);
   const remove = useServerFn(removeFromQueue);
   const reset = useServerFn(resetQueueItem);
+  const move = useServerFn(moveQueueItem);
   const chans = useServerFn(listChannels);
   const qc = useQueryClient();
 
@@ -30,11 +31,22 @@ function QueuePage() {
 
   const addMut = useMutation({
     mutationFn: (urls: string[]) => add({ data: { urls, channel_id: channelId || null } }),
-    onSuccess: (r) => { toast.success(`Added ${r.added} videos`); setText(""); qc.invalidateQueries({ queryKey: ["queue"] }); },
+    onSuccess: (r) => {
+      if (r.added && r.skipped) toast.success(`Added ${r.added} · skipped ${r.skipped} duplicate${r.skipped === 1 ? "" : "s"}`);
+      else if (r.added) toast.success(`Added ${r.added} video${r.added === 1 ? "" : "s"}`);
+      else toast.warning(`Skipped ${r.skipped} duplicate${r.skipped === 1 ? "" : "s"}`);
+      setText("");
+      qc.invalidateQueries({ queryKey: ["queue"] });
+    },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
   const rmMut = useMutation({ mutationFn: (id: string) => remove({ data: { id } }), onSuccess: () => qc.invalidateQueries({ queryKey: ["queue"] }) });
   const resetMut = useMutation({ mutationFn: (id: string) => reset({ data: { id } }), onSuccess: () => qc.invalidateQueries({ queryKey: ["queue"] }) });
+  const moveMut = useMutation({
+    mutationFn: ({ id, direction }: { id: string; direction: "up" | "down" }) => move({ data: { id, direction } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["queue"] }),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
 
   function submit() {
     const urls = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
@@ -42,11 +54,12 @@ function QueuePage() {
     addMut.mutate(urls);
   }
 
+  const list_ = items ?? [];
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Queue</h1>
-        <p className="text-sm text-muted-foreground">Paste Cloudinary URLs. Each run consumes one URL from the top.</p>
+        <p className="text-sm text-muted-foreground">Paste Cloudinary URLs. Each run consumes one URL from the top. Duplicates are automatically skipped.</p>
       </div>
 
       <Card>
@@ -72,19 +85,31 @@ function QueuePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><ListVideo className="h-4 w-4"/>Queue ({items?.length ?? 0})</CardTitle>
+          <CardTitle className="flex items-center gap-2"><ListVideo className="h-4 w-4"/>Queue ({list_.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          {(items ?? []).length === 0 ? (
+          {list_.length === 0 ? (
             <div className="text-sm text-muted-foreground">Queue is empty.</div>
           ) : (
             <ul className="divide-y divide-border">
-              {(items ?? []).map((it) => (
+              {list_.map((it, i) => (
                 <li key={it.id} className="py-3 flex items-center gap-3">
                   <span className="text-xs text-muted-foreground w-8">#{it.position}</span>
                   <Badge variant="outline" className="capitalize">{it.status}</Badge>
                   <span className="font-mono text-xs truncate flex-1 text-muted-foreground">{it.cloudinary_url}</span>
                   {it.error && <span className="text-xs text-destructive truncate max-w-[180px]">{it.error}</span>}
+                  {it.status === "pending" && (
+                    <>
+                      <Button size="icon" variant="ghost" disabled={i === 0 || moveMut.isPending}
+                        onClick={() => moveMut.mutate({ id: it.id, direction: "up" })} title="Move up">
+                        <ArrowUp className="h-4 w-4" />
+                      </Button>
+                      <Button size="icon" variant="ghost" disabled={i === list_.length - 1 || moveMut.isPending}
+                        onClick={() => moveMut.mutate({ id: it.id, direction: "down" })} title="Move down">
+                        <ArrowDown className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
                   {it.status !== "pending" && (
                     <Button size="icon" variant="ghost" onClick={() => resetMut.mutate(it.id)} title="Reset to pending">
                       <RotateCcw className="h-4 w-4" />

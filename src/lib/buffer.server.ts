@@ -2,6 +2,7 @@
 export interface BufferClient {
   gql<T = unknown>(query: string, variables?: Record<string, unknown>): Promise<T>;
   testConnection(): Promise<{ ok: boolean; message: string }>;
+  verifySchema(): Promise<{ ok: boolean; hasCreatePost: boolean; mutationName: string | null; inputFields: string[]; message: string }>;
   createPost(input: { channelId: string; text: string; mediaUrl: string }): Promise<{ postId: string; raw: unknown }>;
   getPost(id: string): Promise<{ analytics: Record<string, number>; raw: unknown } | null>;
 }
@@ -33,6 +34,22 @@ export function makeBufferClient(token: string, endpoint: string): BufferClient 
         return { ok: true, message: "Connected" };
       } catch (e) {
         return { ok: false, message: e instanceof Error ? e.message : String(e) };
+      }
+    },
+    async verifySchema() {
+      try {
+        const data = await gql<{ __schema: { mutationType: { fields: Array<{ name: string; args: Array<{ name: string; type: { name: string | null; ofType?: { name: string | null } } }> }> } } }>(
+          `query { __schema { mutationType { fields { name args { name type { name ofType { name } } } } } } }`,
+        );
+        const fields = data.__schema?.mutationType?.fields ?? [];
+        const candidates = ["createPost", "createUpdate", "publishPost", "schedulePost"];
+        const found = fields.find((f) => candidates.includes(f.name));
+        if (!found) {
+          return { ok: false, hasCreatePost: false, mutationName: null, inputFields: [], message: `No publish mutation found. Available: ${fields.map((f) => f.name).slice(0, 15).join(", ")}` };
+        }
+        return { ok: true, hasCreatePost: true, mutationName: found.name, inputFields: found.args.map((a) => a.name), message: `Found mutation "${found.name}"` };
+      } catch (e) {
+        return { ok: false, hasCreatePost: false, mutationName: null, inputFields: [], message: e instanceof Error ? e.message : String(e) };
       }
     },
     async createPost({ channelId, text, mediaUrl }) {
