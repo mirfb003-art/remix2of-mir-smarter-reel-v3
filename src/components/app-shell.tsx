@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
-  LayoutDashboard, ListVideo, Table2, Brain, LogOut, Sparkles,
+  LayoutDashboard, ListVideo, Table2, Brain, LogOut, Sparkles, TrendingUp,
   Cable, Wand2, Search, Clock, SlidersHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -14,6 +14,7 @@ const nav = [
   { to: "/queue", label: "Queue", icon: ListVideo },
   { to: "/sheet", label: "Sheet", icon: Table2 },
   { to: "/learning", label: "Learning", icon: Brain },
+  { to: "/insights", label: "Insights", icon: TrendingUp },
 ];
 
 const settingsNav = [
