@@ -75,6 +75,15 @@ function QueuePage() {
     addMut.mutate(urls);
   }
 
+  async function onFile(f: File) {
+    const raw = await f.text();
+    // Accept CSV, TSV, or line-per-URL. Extract anything that looks like a URL.
+    const urls = Array.from(raw.matchAll(/https?:\/\/[^\s,"']+/gi)).map((m) => m[0]);
+    if (!urls.length) return toast.error("No URLs found in file");
+    addMut.mutate(urls);
+  }
+
+
   const list_ = items ?? [];
   return (
     <div className="space-y-6">
