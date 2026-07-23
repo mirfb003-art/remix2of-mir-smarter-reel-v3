@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Loader2, Sparkles, Lock } from "lucide-react";
+import { ensureSharedSession } from "@/lib/shared-session";
 
 const SITE_PASSWORD = "irfan1293";
 const UNLOCK_KEY = "loop:unlocked";
