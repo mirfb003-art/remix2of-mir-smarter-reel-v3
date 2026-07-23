@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Loader2, Sparkles, Lock } from "lucide-react";
+import { ensureSharedSession } from "@/lib/shared-session";
 
 const SITE_PASSWORD = "irfan1293";
 const UNLOCK_KEY = "loop:unlocked";
@@ -26,18 +27,24 @@ function UnlockPage() {
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.localStorage.getItem(UNLOCK_KEY) === "true") {
-      navigate({ to: next || "/dashboard" });
+      ensureSharedSession()
+        .then(() => navigate({ to: next || "/dashboard" }))
+        .catch(() => {});
     }
   }, [navigate, next]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 200));
     if (password === SITE_PASSWORD) {
-      window.localStorage.setItem(UNLOCK_KEY, "true");
-      toast.success("Unlocked");
-      navigate({ to: next || "/dashboard" });
+      try {
+        await ensureSharedSession();
+        window.localStorage.setItem(UNLOCK_KEY, "true");
+        toast.success("Unlocked");
+        navigate({ to: next || "/dashboard" });
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Sign-in failed");
+      }
     } else {
       toast.error("Incorrect password");
     }
