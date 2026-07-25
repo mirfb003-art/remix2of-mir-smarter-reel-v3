@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { listBufferCreds, saveBufferCred, deleteBufferCred, testBufferCred, verifyBufferSchema } from "@/lib/buffer.functions";
+import { listBufferCreds, saveBufferCred, deleteBufferCred, testBufferCred, verifyBufferSchema, syncBufferChannels } from "@/lib/buffer.functions";
 import { listChannels, saveChannel, deleteChannel } from "@/lib/channels.functions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
