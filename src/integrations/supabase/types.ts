@@ -785,6 +785,7 @@ export type Database = {
           channel_id: string | null
           created_at: string
           id: string
+          metrics_updated_at: string | null
           permalink: string | null
           platform: string | null
           posted_at: string | null
@@ -798,6 +799,7 @@ export type Database = {
           channel_id?: string | null
           created_at?: string
           id?: string
+          metrics_updated_at?: string | null
           permalink?: string | null
           platform?: string | null
           posted_at?: string | null
@@ -811,6 +813,7 @@ export type Database = {
           channel_id?: string | null
           created_at?: string
           id?: string
+          metrics_updated_at?: string | null
           permalink?: string | null
           platform?: string | null
           posted_at?: string | null
