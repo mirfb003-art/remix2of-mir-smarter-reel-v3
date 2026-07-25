@@ -111,18 +111,33 @@ function BufferSettings() {
           {(creds ?? []).length === 0 ? <div className="text-sm text-muted-foreground">None yet.</div> : (
             <ul className="divide-y divide-border">
               {(creds ?? []).map((c) => (
-                <li key={c.id} className="py-3 flex items-center gap-3">
-                  <div className="flex-1">
+                <li key={c.id} className="py-3 flex flex-wrap items-center gap-2">
+                  <div className="flex-1 min-w-[180px]">
                     <div className="text-sm font-medium">{c.label}</div>
                     <div className="text-xs text-muted-foreground font-mono">{c.graphql_endpoint}</div>
                   </div>
                   <Badge variant={c.status === "connected" ? "default" : "outline"}>{c.status}</Badge>
                   <Button size="sm" variant="outline" onClick={() => testMut.mutate(c.id)} disabled={testMut.isPending}><CheckCircle2 className="h-4 w-4 mr-1"/>Test</Button>
                   <Button size="sm" variant="outline" onClick={() => verifyMut.mutate(c.id)} disabled={verifyMut.isPending}><ShieldCheck className="h-4 w-4 mr-1"/>Verify publish</Button>
+                  <Button size="sm" variant="outline" onClick={() => syncMut.mutate(c.id)} disabled={syncMut.isPending}><RefreshCw className={`h-4 w-4 mr-1 ${syncMut.isPending ? "animate-spin" : ""}`}/>Sync channels</Button>
                   <Button size="icon" variant="ghost" onClick={() => delMut.mutate(c.id)}><Trash2 className="h-4 w-4 text-destructive"/></Button>
                 </li>
               ))}
             </ul>
+          )}
+          {syncedPreview.length > 0 && (
+            <div className="mt-4 rounded-md border border-border bg-muted/30 p-3">
+              <div className="text-xs font-medium mb-2">Last synced ({syncedPreview.length})</div>
+              <ul className="flex flex-wrap gap-2">
+                {syncedPreview.map((s) => (
+                  <li key={s.id} className="flex items-center gap-2 rounded-full border border-border bg-background px-2 py-1 text-xs">
+                    {s.avatar && <img src={s.avatar} alt="" className="h-4 w-4 rounded-full" />}
+                    <span className="font-medium">{s.name}</span>
+                    <span className="text-muted-foreground">· {s.platform}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </CardContent>
       </Card>
