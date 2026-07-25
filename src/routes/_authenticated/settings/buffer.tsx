@@ -38,10 +38,27 @@ function BufferSettings() {
   const [chPlatform, setChPlatform] = useState("instagram");
   const [chBufferId, setChBufferId] = useState("");
   const [chCredId, setChCredId] = useState<string>("");
+  const [syncedPreview, setSyncedPreview] = useState<Array<{ id: string; name: string; platform: string; avatar?: string }>>([]);
+
+  const syncMut = useMutation({
+    mutationFn: (id: string) => sync({ data: { id } }),
+    onSuccess: (r) => {
+      setSyncedPreview(r.channels);
+      toast.success(`Successfully synced ${r.count} channel${r.count === 1 ? "" : "s"} from Buffer`);
+      qc.invalidateQueries({ queryKey: ["channels"] });
+      qc.invalidateQueries({ queryKey: ["buffer-creds"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Sync failed"),
+  });
 
   const saveMut = useMutation({
     mutationFn: () => save({ data: { label, api_token: token, graphql_endpoint: endpoint } }),
-    onSuccess: () => { toast.success("Saved"); setLabel(""); setToken(""); qc.invalidateQueries({ queryKey: ["buffer-creds"] }); },
+    onSuccess: (r) => {
+      toast.success("Saved");
+      setLabel(""); setToken("");
+      qc.invalidateQueries({ queryKey: ["buffer-creds"] });
+      if (r?.id) syncMut.mutate(r.id);
+    },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
   const delMut = useMutation({ mutationFn: (id: string) => del({ data: { id } }), onSuccess: () => qc.invalidateQueries({ queryKey: ["buffer-creds"] }) });
@@ -50,10 +67,14 @@ function BufferSettings() {
     onSuccess: (r) => { r.ok ? toast.success("Connected") : toast.error(r.message ?? "Failed"); qc.invalidateQueries({ queryKey: ["buffer-creds"] }); },
   });
   const verifyMut = useMutation({
-    mutationFn: (id: string) => verify({ data: { id } }),
-    onSuccess: (r) => {
+    mutationFn: async (id: string) => {
+      const r = await verify({ data: { id } });
+      return { r, id };
+    },
+    onSuccess: ({ r, id }) => {
       if (r.ok) toast.success(`${r.message} · args: ${r.inputFields.join(", ") || "(none)"}`, { duration: 8000 });
       else toast.error(r.message, { duration: 10000 });
+      syncMut.mutate(id);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
