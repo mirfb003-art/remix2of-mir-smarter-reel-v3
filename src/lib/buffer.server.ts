@@ -114,5 +114,43 @@ export function makeBufferClient(token: string, endpoint: string): BufferClient 
         return null;
       }
     },
+    async getChannelPostsMetrics(channelId, limit = 50) {
+      try {
+        const data = await gql<{
+          posts: {
+            nodes: Array<{
+              id: string;
+              text: string | null;
+              sentAt: string | null;
+              metricsUpdatedAt: string | null;
+              metrics: Array<{ type?: string | null; name?: string | null; value: number | string | null; unit?: string | null }> | null;
+            }>;
+          };
+        }>(
+          `query GetChannelPostsMetrics($channelId: String!, $limit: Int!) {
+            posts(input: { channelId: $channelId, status: SENT, limit: $limit }) {
+              nodes {
+                id
+                text
+                sentAt
+                metricsUpdatedAt
+                metrics { type name value unit }
+              }
+            }
+          }`,
+          { channelId, limit },
+        );
+        return (data.posts?.nodes ?? []).map((n) => ({
+          id: n.id,
+          text: n.text,
+          sentAt: n.sentAt,
+          metricsUpdatedAt: n.metricsUpdatedAt,
+          metrics: normalizeBufferMetrics(n.metrics ?? []),
+          raw: n,
+        }));
+      } catch {
+        return [];
+      }
+    },
   };
 }
