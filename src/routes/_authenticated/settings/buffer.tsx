@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Plug, Trash2, CheckCircle2, ShieldCheck } from "lucide-react";
+import { Plug, Trash2, CheckCircle2, ShieldCheck, RefreshCw } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/settings/buffer")({ component: BufferSettings });
 
