@@ -1,10 +1,44 @@
 // Buffer GraphQL client (server-only). Uses user's API token & endpoint.
+export interface BufferPostMetrics {
+  id: string;
+  text: string | null;
+  sentAt: string | null;
+  metricsUpdatedAt: string | null;
+  metrics: Record<string, number>;
+  raw: unknown;
+}
 export interface BufferClient {
   gql<T = unknown>(query: string, variables?: Record<string, unknown>): Promise<T>;
   testConnection(): Promise<{ ok: boolean; message: string }>;
   verifySchema(): Promise<{ ok: boolean; hasCreatePost: boolean; mutationName: string | null; inputFields: string[]; message: string }>;
   createPost(input: { channelId: string; text: string; mediaUrl: string }): Promise<{ postId: string; raw: unknown }>;
   getPost(id: string): Promise<{ analytics: Record<string, number>; raw: unknown } | null>;
+  getChannelPostsMetrics(channelId: string, limit?: number): Promise<BufferPostMetrics[]>;
+}
+
+// Normalize Buffer metric names/types to our canonical keys.
+export function normalizeBufferMetrics(metrics: Array<{ type?: string | null; name?: string | null; value?: number | string | null }>): Record<string, number> {
+  const out: Record<string, number> = {};
+  const keyMap: Record<string, string> = {
+    views: "views", view: "views", videoviews: "views", plays: "views",
+    impressions: "impressions", impression: "impressions",
+    likes: "likes", like: "likes", reactions: "likes", favorites: "likes",
+    comments: "comments", comment: "comments", replies: "comments",
+    shares: "shares", share: "shares", reposts: "shares", retweets: "shares",
+    saves: "saves", save: "saves", bookmarks: "saves",
+    reach: "reach",
+  };
+  for (const m of metrics ?? []) {
+    const raw = String(m.name ?? m.type ?? "").toLowerCase().replace(/[\s_-]/g, "");
+    const key = keyMap[raw];
+    if (!key) continue;
+    const val = Number(m.value ?? 0);
+    if (!Number.isFinite(val)) continue;
+    out[key] = (out[key] ?? 0) + val;
+  }
+  // Fallback: use impressions as views if views missing.
+  if (out.views == null && out.impressions != null) out.views = out.impressions;
+  return out;
 }
 
 export function makeBufferClient(token: string, endpoint: string): BufferClient {
