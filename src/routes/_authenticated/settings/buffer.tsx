@@ -21,6 +21,7 @@ function BufferSettings() {
   const del = useServerFn(deleteBufferCred);
   const test = useServerFn(testBufferCred);
   const verify = useServerFn(verifyBufferSchema);
+  const sync = useServerFn(syncBufferChannels);
   const chansFn = useServerFn(listChannels);
   const saveChan = useServerFn(saveChannel);
   const delChan = useServerFn(deleteChannel);
