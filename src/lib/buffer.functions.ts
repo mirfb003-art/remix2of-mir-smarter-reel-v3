@@ -17,7 +17,7 @@ const saveSchema = z.object({
   id: z.string().uuid().optional(),
   label: z.string().min(1).max(80),
   api_token: z.string().min(10),
-  graphql_endpoint: z.string().url().default("https://graphql.buffer.com"),
+  graphql_endpoint: z.string().url().default("https://api.buffer.com"),
 });
 
 export const saveBufferCred = createServerFn({ method: "POST" })
