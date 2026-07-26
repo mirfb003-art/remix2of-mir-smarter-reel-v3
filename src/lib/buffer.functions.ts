@@ -94,45 +94,52 @@ export const syncBufferChannels = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: cred, error } = await context.supabase
       .from("buffer_credentials")
-      .select("api_token,graphql_endpoint")
+      .select("api_token")
       .eq("id", data.id)
       .single();
     if (error || !cred) throw new Error("Credential not found");
 
-    const endpoints = Array.from(new Set([
-      cred.graphql_endpoint,
-      "https://api.buffer.com",
-      "https://graphql.buffer.com",
-    ]));
+    const API_URL = "https://api.buffer.com";
+    const headers = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${cred.api_token}`,
+    };
 
-    const query = `query { account { organizations { id channels { id name displayName service avatar } } } }`;
-    let payload: any = null;
-    let lastErr = "";
-    for (const url of endpoints) {
-      try {
-        const res = await fetch(url, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${cred.api_token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ query }),
-        });
-        const body = await res.text();
-        if (!res.ok) { lastErr = `${url} ${res.status}: ${body.slice(0, 200)}`; continue; }
-        const parsed = JSON.parse(body);
-        if (parsed?.errors?.length) { lastErr = `${url}: ${parsed.errors.map((e: any) => e.message).join("; ")}`; continue; }
-        if (parsed?.data?.account?.organizations) { payload = parsed; break; }
-        lastErr = `${url}: unexpected shape`;
-      } catch (e) {
-        lastErr = e instanceof Error ? e.message : String(e);
-      }
+    async function gql<T = any>(query: string, variables?: Record<string, unknown>): Promise<T> {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ query, variables }),
+      });
+      const text = await res.text();
+      if (!res.ok) throw new Error(`Buffer ${res.status}: ${text.slice(0, 300)}`);
+      const parsed = JSON.parse(text);
+      if (parsed?.errors?.length) throw new Error(parsed.errors.map((e: any) => e.message).join("; "));
+      return parsed.data as T;
     }
-    if (!payload) throw new Error(`Buffer sync failed: ${lastErr || "no data"}`);
 
-    const orgs: Array<{ channels?: Array<{ id: string; name?: string; displayName?: string; service?: string; avatar?: string }> }> =
-      payload.data.account.organizations ?? [];
-    const channels = orgs.flatMap((o) => o.channels ?? []);
+    // Step 1: organizations
+    const orgData = await gql<{ account: { organizations: Array<{ id: string; name: string }> } }>(
+      `query GetOrganizations { account { organizations { id name } } }`,
+    );
+    const orgs = orgData?.account?.organizations ?? [];
+    if (orgs.length === 0) throw new Error("No organizations found for this Buffer account");
+
+    // Step 2: channels per org
+    const channelQuery = `query GetChannels($organizationId: OrganizationId!) {
+      channels(input: { organizationId: $organizationId }) {
+        id name service type serviceId avatar
+      }
+    }`;
+
+    const allChannels: Array<{ id: string; name?: string; service?: string; avatar?: string }> = [];
+    for (const org of orgs) {
+      const chData = await gql<{ channels: Array<{ id: string; name?: string; service?: string; type?: string; serviceId?: string; avatar?: string }> }>(
+        channelQuery,
+        { organizationId: org.id },
+      );
+      for (const ch of chData?.channels ?? []) allChannels.push(ch);
+    }
 
     // Existing channels for this credential
     const { data: existing } = await context.supabase
@@ -143,13 +150,11 @@ export const syncBufferChannels = createServerFn({ method: "POST" })
     const existingMap = new Map((existing ?? []).map((c) => [c.buffer_channel_id, c.id]));
 
     const synced: Array<{ id: string; name: string; platform: string; avatar?: string }> = [];
-    for (const ch of channels) {
-      const name = ch.displayName || ch.name || ch.service || "Channel";
+    for (const ch of allChannels) {
+      const name = ch.name || ch.service || "Channel";
       const platform = (ch.service || "unknown").toLowerCase();
       if (existingMap.has(ch.id)) {
-        await context.supabase.from("channels").update({
-          name, platform,
-        }).eq("id", existingMap.get(ch.id)!);
+        await context.supabase.from("channels").update({ name, platform }).eq("id", existingMap.get(ch.id)!);
       } else {
         await context.supabase.from("channels").insert({
           user_id: context.userId,
