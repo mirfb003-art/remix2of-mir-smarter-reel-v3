@@ -449,7 +449,7 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
       ]);
 
       const { decision, strategyId } = await decideStrategy({
-        sb, userId, runId, apiKey, model, objective,
+        sb, userId, runId, aiSettings, objective,
         videoSummary: state.analyze_video!.summary,
         memoryTop: memRes.data ?? [],
         trends: trendRes.data ?? [],
