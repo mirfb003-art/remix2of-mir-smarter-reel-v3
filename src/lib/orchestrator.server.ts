@@ -129,16 +129,15 @@ async function stepAnalyzePrevious(sb: Sb, userId: string, runId: string, aiSett
   return report;
 }
 
-async function stepAnalyzeVideo(sb: Sb, userId: string, runId: string, url: string, apiKey: string, model: string, visionPrompt: string) {
-  const provider = createAiGateway(apiKey);
+async function stepAnalyzeVideo(sb: Sb, userId: string, runId: string, url: string, aiSettings: AISettingsSchema, visionPrompt: string) {
   // Cloudinary percent offsets use the "p" suffix (so_25p); a literal "%" 400s.
   const candidates = ["auto", "25p", "50p", "75p"].map((o) => cloudinaryThumb(url, o));
   const ok = await usableFrames(candidates);
   const frames = ok.length ? ok : [cloudinaryThumb(url, "0")];
 
   const result = await withRetry("ai",
-    async () => generateText({
-      model: provider(model),
+    async () => executeAIRequest(aiSettings, (model) => generateText({
+      model,
       messages: [{
         role: "user",
         content: [
@@ -146,13 +145,13 @@ async function stepAnalyzeVideo(sb: Sb, userId: string, runId: string, url: stri
           ...frames.map((u) => ({ type: "image" as const, image: u })),
         ],
       }],
-    }),
+    }), { requiresVision: true }),
     async (attempt, err, durationMs) => {
       await audit(sb, {
         userId, runId, eventType: err ? "ai.retry" : "ai.response",
         module: "ai", attempt, status: err ? "error" : "success", durationMs,
         error: err instanceof Error ? err.message : err ? String(err) : null,
-        payload: { purpose: "vision", model },
+        payload: { purpose: "vision", mode: aiSettings.mode },
       });
     },
   );
