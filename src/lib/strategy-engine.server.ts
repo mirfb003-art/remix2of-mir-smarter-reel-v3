@@ -2,7 +2,7 @@
 // a structured decision the Caption Generator follows.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateText } from "ai";
-import { createAiGateway } from "./ai-gateway.server";
+import { executeAIRequest, type AISettingsSchema } from "./ai-gateway.server";
 import { withRetry, audit } from "./reliability.server";
 
 type Sb = SupabaseClient;
