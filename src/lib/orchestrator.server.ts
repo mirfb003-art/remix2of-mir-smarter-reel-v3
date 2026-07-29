@@ -177,7 +177,7 @@ async function stepAnalyzeVideo(sb: Sb, userId: string, runId: string, url: stri
 }
 
 async function stepGenerateCaption(
-  sb: Sb, userId: string, runId: string, apiKey: string, videoSummary: any, captionPrompt: string,
+  sb: Sb, userId: string, runId: string, aiSettings: AISettingsSchema, videoSummary: any, captionPrompt: string,
   strategy: StrategyDecision | null,
 ) {
   const [aiRes, analysisRes, memoryRes] = await Promise.all([
@@ -191,7 +191,6 @@ async function stepGenerateCaption(
   const { data: prevCaps } = await sb.from("captions").select("text,hashtags").order("created_at", { ascending: false }).limit(analysisSet?.n_value ?? 5);
 
   const objective = ai?.objective === "custom" ? (ai?.custom_objective ?? "engagement") : (ai?.objective ?? "engagement");
-  const provider = createAiGateway(apiKey);
   const prompt = `${captionPrompt}
 
 OBJECTIVE: Maximize ${objective}
@@ -216,17 +215,17 @@ ${JSON.stringify(videoSummary)}
 Return JSON: { "caption", "hook", "cta", "hashtags": [...], "style_tags": [...] }. The caption's hook, length, cta, emojis, and hashtag count MUST match the STRATEGY.`;
 
   const result = await withRetry("ai",
-    async () => generateText({
-      model: provider(ai?.model ?? "google/gemini-3-flash-preview"),
+    async () => executeAIRequest(aiSettings, (model) => generateText({
+      model,
       temperature: ai?.temperature ?? 0.8,
       prompt,
-    }),
+    })),
     async (attempt, err, durationMs) => {
       await audit(sb, {
         userId, runId, eventType: err ? "ai.retry" : "ai.response",
         module: "ai", attempt, status: err ? "error" : "success", durationMs,
         error: err instanceof Error ? err.message : err ? String(err) : null,
-        payload: { purpose: "caption", model: ai?.model },
+        payload: { purpose: "caption", mode: aiSettings.mode },
       });
     },
   );
