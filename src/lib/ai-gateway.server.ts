@@ -247,7 +247,6 @@ export async function healthCheckProvider(cfg: ProviderConfig): Promise<{ ok: bo
     const res = await generateText({
       model,
       prompt: "Reply with the single word: OK",
-      maxTokens: 8,
     });
     return { ok: true, latencyMs: Date.now() - t0, sample: res.text?.slice(0, 40) };
   } catch (err) {
