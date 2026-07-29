@@ -4,7 +4,9 @@ import { useServerFn } from "@tanstack/react-start";
 import { getAllSettings, updateAiSettings } from "@/lib/settings.functions";
 import {
   getProviderCatalog, updateAIProviders, runHealthCheck, getResolvedAISettings,
+  discoverGeminiModels,
 } from "@/lib/ai-providers.functions";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, CheckCircle2, XCircle, Loader2, Sparkles, Eye } from "lucide-react";
+import { ArrowDown, ArrowUp, CheckCircle2, XCircle, Loader2, Sparkles, Eye, RefreshCw, Clock } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/settings/ai")({ component: AiSettings });
 
@@ -44,6 +46,8 @@ function AiSettings() {
   const getResolved = useServerFn(getResolvedAISettings);
   const updProviders = useServerFn(updateAIProviders);
   const health = useServerFn(runHealthCheck);
+  const discover = useServerFn(discoverGeminiModels);
+
   const qc = useQueryClient();
 
   const { data } = useQuery({ queryKey: ["settings"], queryFn: () => get() });
@@ -138,6 +142,8 @@ function AiSettings() {
                 qc.invalidateQueries({ queryKey: ["ai-resolved"] });
               }}
               onHealth={async (cfg) => health({ data: cfg })}
+              onDiscover={async (apiKey) => (await discover({ data: { apiKey, verify: true } })).models}
+
             />
           ) : (
             <div className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin"/>Loading provider catalog…</div>
@@ -160,12 +166,19 @@ interface Catalog {
   models: Record<ProviderId, Array<{ id: string; name: string; vision: boolean; isRecommended?: boolean }>>;
 }
 
+interface DiscoveredModel {
+  id: string; displayName: string;
+  status: "working" | "failed" | "untested";
+  latencyMs: number; error: string | null; supportsVision: boolean;
+}
+
 function ProvidersPanel({
-  catalog, initial, onSave, onHealth,
+  catalog, initial, onSave, onHealth, onDiscover,
 }: {
   catalog: Catalog; initial: ResolvedAI;
   onSave: (p: ResolvedAI) => Promise<void>;
   onHealth: (c: ProviderCfg) => Promise<{ ok: boolean; latencyMs: number; error?: string; sample?: string }>;
+  onDiscover: (apiKey: string) => Promise<DiscoveredModel[]>;
 }) {
   const [mode, setMode] = useState<"strict" | "fallback">(initial.mode);
   const [active, setActive] = useState<ProviderId>(initial.activeProvider);
@@ -174,8 +187,14 @@ function ProvidersPanel({
   const [saving, setSaving] = useState(false);
   const [health, setHealth] = useState<Record<string, { ok: boolean; latencyMs: number; error?: string; sample?: string; loading?: boolean }>>({});
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
+  const [discovered, setDiscovered] = useState<DiscoveredModel[] | null>(null);
+  const [discovering, setDiscovering] = useState(false);
+  const [discoverError, setDiscoverError] = useState<string | null>(null);
+  const [lastDiscoveredKey, setLastDiscoveredKey] = useState<string>("");
 
   const allProviderIds = useMemo(() => Object.keys(catalog.meta) as ProviderId[], [catalog]);
+
+
 
   const ensureCfg = (id: ProviderId): ProviderCfg => providers[id] ?? {
     id, apiKey: "", selectedModel: catalog.models[id]?.[0]?.id ?? "",
@@ -207,6 +226,42 @@ function ProvidersPanel({
       setHealth((h) => ({ ...h, [id]: { ok: false, latencyMs: 0, error: e instanceof Error ? e.message : "failed", loading: false } }));
     }
   };
+
+  const googleKey = providers.google?.apiKey ?? "";
+
+  const runDiscovery = async (apiKey: string) => {
+    if (!apiKey) return;
+    setDiscovering(true);
+    setDiscoverError(null);
+    setLastDiscoveredKey(apiKey);
+    try {
+      const models = await onDiscover(apiKey);
+      setDiscovered(models);
+      const working = models.filter((m) => m.status === "working");
+      toast.success(`Discovered ${models.length} models — ${working.length} verified working`);
+      // Auto-select a working model if the current one isn't verified.
+      const current = providers.google?.selectedModel;
+      if (working.length && !working.some((m) => m.id === current)) {
+        const best = working.find((m) => m.supportsVision) ?? working[0];
+        patch("google", { selectedModel: best.id });
+      }
+    } catch (e) {
+      setDiscovered(null);
+      setDiscoverError(e instanceof Error ? e.message : "Discovery failed");
+      toast.error(e instanceof Error ? e.message : "Discovery failed");
+    } finally {
+      setDiscovering(false);
+    }
+  };
+
+  // Auto-discover shortly after the Google key is entered/updated.
+  useEffect(() => {
+    if (!googleKey || googleKey.length < 20 || googleKey === lastDiscoveredKey) return;
+    const t = setTimeout(() => { void runDiscovery(googleKey); }, 900);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleKey]);
+
 
   const save = async () => {
     setSaving(true);
@@ -266,8 +321,19 @@ function ProvidersPanel({
         {allProviderIds.map((id) => {
           const meta = catalog.meta[id];
           const cfg = ensureCfg(id);
-          const models = catalog.models[id] ?? [];
+          const isGoogle = id === "google";
+          const models = isGoogle && discovered?.length
+            ? discovered.map((m) => ({
+                id: m.id,
+                name: m.displayName,
+                vision: m.supportsVision,
+                isRecommended: m.status === "working",
+                status: m.status,
+                latencyMs: m.latencyMs,
+              }))
+            : (catalog.models[id] ?? []).map((m) => ({ ...m, status: undefined as undefined | string, latencyMs: 0 }));
           const h = health[id];
+
           return (
             <Card key={id}>
               <CardHeader className="pb-3">
@@ -309,7 +375,12 @@ function ProvidersPanel({
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <Label>Model</Label>
+                  <Label className="flex items-center gap-2">
+                    Model
+                    {isGoogle && discovered?.length ? (
+                      <span className="text-[10px] text-muted-foreground">(auto-discovered)</span>
+                    ) : null}
+                  </Label>
                   <Select value={cfg.selectedModel} onValueChange={(v) => patch(id, { selectedModel: v })}>
                     <SelectTrigger><SelectValue/></SelectTrigger>
                     <SelectContent>
@@ -318,13 +389,59 @@ function ProvidersPanel({
                           <span className="flex items-center gap-2">
                             {m.name}
                             {m.vision && <Badge variant="outline" className="h-4 text-[10px]">Vision</Badge>}
-                            {m.isRecommended && <Sparkles className="h-3 w-3 text-primary"/>}
+                            {m.status === "working" && <CheckCircle2 className="h-3 w-3 text-primary"/>}
+                            {m.status === "failed" && <XCircle className="h-3 w-3 text-destructive"/>}
+                            {m.status === "untested" && <Clock className="h-3 w-3 text-muted-foreground"/>}
+                            {!m.status && m.isRecommended && <Sparkles className="h-3 w-3 text-primary"/>}
                           </span>
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
+                {isGoogle && (
+                  <div className="md:col-span-2 space-y-2 rounded-md border p-3">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div>
+                        <p className="text-sm font-medium">Model auto-discovery & live verification</p>
+                        <p className="text-xs text-muted-foreground">
+                          Lists every model your key can call and pings each one to confirm it really works.
+                        </p>
+                      </div>
+                      <Button size="sm" variant="outline" disabled={discovering || !cfg.apiKey}
+                        onClick={() => runDiscovery(cfg.apiKey)}>
+                        {discovering
+                          ? <><Loader2 className="h-4 w-4 animate-spin mr-2"/>Verifying…</>
+                          : <><RefreshCw className="h-4 w-4 mr-2"/>Discover & verify</>}
+                      </Button>
+                    </div>
+                    {discoverError && (
+                      <div className="text-xs text-destructive rounded border border-destructive/30 bg-destructive/5 p-2">{discoverError}</div>
+                    )}
+                    {discovered && (
+                      <div className="max-h-64 overflow-auto rounded border divide-y">
+                        {discovered.map((m) => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => patch("google", { selectedModel: m.id })}
+                            className={`w-full text-left flex items-center gap-2 px-2 py-1.5 text-xs hover:bg-muted/60 ${cfg.selectedModel === m.id ? "bg-muted" : ""}`}
+                          >
+                            {m.status === "working" && <CheckCircle2 className="h-3.5 w-3.5 text-primary shrink-0"/>}
+                            {m.status === "failed" && <XCircle className="h-3.5 w-3.5 text-destructive shrink-0"/>}
+                            {m.status === "untested" && <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0"/>}
+                            <span className="font-mono truncate flex-1">{m.id}</span>
+                            {m.supportsVision && <Badge variant="outline" className="h-4 text-[10px]">Vision</Badge>}
+                            <span className="text-muted-foreground w-14 text-right">
+                              {m.status === "working" ? `${m.latencyMs}ms` : m.status === "failed" ? "failed" : "—"}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {meta.needsAccountId && (
                   <div className="space-y-1">
                     <Label>Account ID</Label>
