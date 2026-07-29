@@ -464,7 +464,7 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
       await refreshHeartbeat(sb, runId, channelId);
       const baseline = await computeBaseline(sb, userId);
       const { predictionId } = await predictMetrics({
-        sb, userId, runId, apiKey, model,
+        sb, userId, runId, aiSettings,
         strategy: state.strategy!.decision,
         videoSummary: state.analyze_video!.summary,
         baseline,
