@@ -113,7 +113,7 @@ export function getAIProviderInstance(config: ProviderConfig): LanguageModelV1 {
     case "google":
       return createGoogleGenerativeAI({ apiKey: config.apiKey })(config.selectedModel);
     case "openai":
-      return createOpenAI({ apiKey: config.apiKey, compatibility: "strict" })(config.selectedModel);
+      return createOpenAI({ apiKey: config.apiKey })(config.selectedModel);
     case "groq":
       return createGroq({ apiKey: config.apiKey })(config.selectedModel);
     case "openrouter":
