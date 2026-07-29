@@ -68,6 +68,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:description", content: "A self-improving video publishing platform. Every post makes the next one smarter." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Loop — AI Adaptive Video Publisher" },
+      { name: "twitter:description", content: "A self-improving video publishing platform. Every post makes the next one smarter." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/57f57166-fe44-4a99-82fc-fc0dbbdf6b20/id-preview-6f095250--c2c14eaf-5106-4f5e-960e-e4d9575b486c.lovable.app-1785329290794.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/57f57166-fe44-4a99-82fc-fc0dbbdf6b20/id-preview-6f095250--c2c14eaf-5106-4f5e-960e-e4d9575b486c.lovable.app-1785329290794.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
