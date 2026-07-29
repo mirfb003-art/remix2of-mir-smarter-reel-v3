@@ -16,48 +16,60 @@ export type Database = {
     Tables: {
       ai_settings: {
         Row: {
+          active_provider: string
           brand_tone: string
           created_at: string
           custom_objective: string | null
           default_hashtags: string[]
+          fallback_chain: Json
           id: string
           language: string
           max_caption_length: number
           model: string
           objective: Database["public"]["Enums"]["channel_objective"]
           platform_rules: Json
+          provider_mode: string
+          providers_config: Json
           temperature: number
           updated_at: string
           user_id: string
           user_instructions: string | null
         }
         Insert: {
+          active_provider?: string
           brand_tone?: string
           created_at?: string
           custom_objective?: string | null
           default_hashtags?: string[]
+          fallback_chain?: Json
           id?: string
           language?: string
           max_caption_length?: number
           model?: string
           objective?: Database["public"]["Enums"]["channel_objective"]
           platform_rules?: Json
+          provider_mode?: string
+          providers_config?: Json
           temperature?: number
           updated_at?: string
           user_id: string
           user_instructions?: string | null
         }
         Update: {
+          active_provider?: string
           brand_tone?: string
           created_at?: string
           custom_objective?: string | null
           default_hashtags?: string[]
+          fallback_chain?: Json
           id?: string
           language?: string
           max_caption_length?: number
           model?: string
           objective?: Database["public"]["Enums"]["channel_objective"]
           platform_rules?: Json
+          provider_mode?: string
+          providers_config?: Json
           temperature?: number
           updated_at?: string
           user_id?: string

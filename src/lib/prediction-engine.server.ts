@@ -2,7 +2,7 @@
 // later scores accuracy after analytics arrive.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateText } from "ai";
-import { createAiGateway } from "./ai-gateway.server";
+import { executeAIRequest, type AISettingsSchema } from "./ai-gateway.server";
 import { withRetry, audit } from "./reliability.server";
 
 type Sb = SupabaseClient;
@@ -14,14 +14,13 @@ export interface Prediction {
 }
 
 export async function predictMetrics({
-  sb, userId, runId, apiKey, model, strategy, videoSummary, baseline,
+  sb, userId, runId, aiSettings, strategy, videoSummary, baseline,
 }: {
   sb: Sb; userId: string; runId: string;
-  apiKey: string; model: string;
+  aiSettings: AISettingsSchema;
   strategy: any; videoSummary: any;
   baseline: { views: number; likes: number; comments: number; shares: number; saves: number; reach: number };
 }): Promise<{ prediction: Prediction; predictionId: string }> {
-  const provider = createAiGateway(apiKey);
   const prompt = `Predict analytics for this post. Return ONLY compact JSON:
 { "views": int, "likes": int, "comments": int, "shares": int, "saves": int, "reach": int, "confidence": 0..1, "rationale": "..." }
 
@@ -33,13 +32,14 @@ Predictions must be non-negative integers grounded in the baseline. Confidence r
 
   const t0 = Date.now();
   const result = await withRetry("ai",
-    async () => generateText({ model: provider(model), temperature: 0.3, prompt }),
+    async () => executeAIRequest(aiSettings, (model) =>
+      generateText({ model, temperature: 0.3, prompt })),
     async (attempt, err, durationMs) => {
       await audit(sb, {
         userId, runId, eventType: err ? "ai.retry" : "ai.response",
         module: "ai", attempt, status: err ? "error" : "success", durationMs,
         error: err instanceof Error ? err.message : err ? String(err) : null,
-        payload: { purpose: "prediction", model },
+        payload: { purpose: "prediction", mode: aiSettings.mode },
       });
     },
   );

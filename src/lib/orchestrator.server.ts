@@ -2,7 +2,7 @@
 // Step-based state machine — resumes from last completed step on retry.
 import { generateText } from "ai";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createAiGateway, requireLovableApiKey } from "./ai-gateway.server";
+import { executeAIRequest, resolveAISettings, type AISettingsSchema } from "./ai-gateway.server";
 import {
   withRetry, audit, acquireChannelLock, releaseChannelLock,
   refreshHeartbeat, getActivePromptVersion, makeIdempotencyKey,
@@ -65,7 +65,7 @@ async function persistStepState(sb: Sb, runId: string, state: StepState, current
 
 // -------- Step implementations --------
 
-async function stepAnalyzePrevious(sb: Sb, userId: string, runId: string, apiKey: string, model: string, learningPrompt: string) {
+async function stepAnalyzePrevious(sb: Sb, userId: string, runId: string, aiSettings: AISettingsSchema, learningPrompt: string) {
   const { data: prev } = await sb.from("runs")
     .select(`id, captions(text,hashtags,cta,hook,length),
       published_posts(post_analytics(views,likes,comments,shares,saves,reach,impressions))`)
@@ -76,19 +76,18 @@ async function stepAnalyzePrevious(sb: Sb, userId: string, runId: string, apiKey
   const analytics = (prev as any).published_posts?.[0]?.post_analytics?.[0];
   if (!cap) return null;
 
-  const provider = createAiGateway(apiKey);
   const t0 = Date.now();
   const result = await withRetry("ai",
-    async () => generateText({
-      model: provider(model),
+    async () => executeAIRequest(aiSettings, (model) => generateText({
+      model,
       prompt: `${learningPrompt}\n\nPrevious caption: ${JSON.stringify(cap)}\nAnalytics: ${JSON.stringify(analytics ?? {})}`,
-    }),
+    })),
     async (attempt, err, durationMs) => {
       await audit(sb, {
         userId, runId, eventType: err ? "ai.retry" : "ai.response",
         module: "ai", attempt, status: err ? "error" : "success", durationMs,
         error: err instanceof Error ? err.message : err ? String(err) : null,
-        payload: { purpose: "learning_report", model },
+        payload: { purpose: "learning_report", mode: aiSettings.mode },
       });
     },
   );
@@ -130,16 +129,15 @@ async function stepAnalyzePrevious(sb: Sb, userId: string, runId: string, apiKey
   return report;
 }
 
-async function stepAnalyzeVideo(sb: Sb, userId: string, runId: string, url: string, apiKey: string, model: string, visionPrompt: string) {
-  const provider = createAiGateway(apiKey);
+async function stepAnalyzeVideo(sb: Sb, userId: string, runId: string, url: string, aiSettings: AISettingsSchema, visionPrompt: string) {
   // Cloudinary percent offsets use the "p" suffix (so_25p); a literal "%" 400s.
   const candidates = ["auto", "25p", "50p", "75p"].map((o) => cloudinaryThumb(url, o));
   const ok = await usableFrames(candidates);
   const frames = ok.length ? ok : [cloudinaryThumb(url, "0")];
 
   const result = await withRetry("ai",
-    async () => generateText({
-      model: provider(model),
+    async () => executeAIRequest(aiSettings, (model) => generateText({
+      model,
       messages: [{
         role: "user",
         content: [
@@ -147,13 +145,13 @@ async function stepAnalyzeVideo(sb: Sb, userId: string, runId: string, url: stri
           ...frames.map((u) => ({ type: "image" as const, image: u })),
         ],
       }],
-    }),
+    }), { requiresVision: true }),
     async (attempt, err, durationMs) => {
       await audit(sb, {
         userId, runId, eventType: err ? "ai.retry" : "ai.response",
         module: "ai", attempt, status: err ? "error" : "success", durationMs,
         error: err instanceof Error ? err.message : err ? String(err) : null,
-        payload: { purpose: "vision", model },
+        payload: { purpose: "vision", mode: aiSettings.mode },
       });
     },
   );
@@ -179,7 +177,7 @@ async function stepAnalyzeVideo(sb: Sb, userId: string, runId: string, url: stri
 }
 
 async function stepGenerateCaption(
-  sb: Sb, userId: string, runId: string, apiKey: string, videoSummary: any, captionPrompt: string,
+  sb: Sb, userId: string, runId: string, aiSettings: AISettingsSchema, videoSummary: any, captionPrompt: string,
   strategy: StrategyDecision | null,
 ) {
   const [aiRes, analysisRes, memoryRes] = await Promise.all([
@@ -193,7 +191,6 @@ async function stepGenerateCaption(
   const { data: prevCaps } = await sb.from("captions").select("text,hashtags").order("created_at", { ascending: false }).limit(analysisSet?.n_value ?? 5);
 
   const objective = ai?.objective === "custom" ? (ai?.custom_objective ?? "engagement") : (ai?.objective ?? "engagement");
-  const provider = createAiGateway(apiKey);
   const prompt = `${captionPrompt}
 
 OBJECTIVE: Maximize ${objective}
@@ -218,17 +215,17 @@ ${JSON.stringify(videoSummary)}
 Return JSON: { "caption", "hook", "cta", "hashtags": [...], "style_tags": [...] }. The caption's hook, length, cta, emojis, and hashtag count MUST match the STRATEGY.`;
 
   const result = await withRetry("ai",
-    async () => generateText({
-      model: provider(ai?.model ?? "google/gemini-3-flash-preview"),
+    async () => executeAIRequest(aiSettings, (model) => generateText({
+      model,
       temperature: ai?.temperature ?? 0.8,
       prompt,
-    }),
+    })),
     async (attempt, err, durationMs) => {
       await audit(sb, {
         userId, runId, eventType: err ? "ai.retry" : "ai.response",
         module: "ai", attempt, status: err ? "error" : "success", durationMs,
         error: err instanceof Error ? err.message : err ? String(err) : null,
-        payload: { purpose: "caption", model: ai?.model },
+        payload: { purpose: "caption", mode: aiSettings.mode },
       });
     },
   );
@@ -387,9 +384,8 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
   const channelId = channel.id;
   const campaignId: string | null = run.campaign_id ?? null;
   const t0 = Date.now();
-  const apiKey = requireLovableApiKey();
-  const { data: aiSet } = await sb.from("ai_settings").select("model,objective").eq("user_id", userId).maybeSingle();
-  const model = aiSet?.model ?? "google/gemini-3-flash-preview";
+  const { data: aiSet } = await sb.from("ai_settings").select("*").eq("user_id", userId).maybeSingle();
+  const aiSettings = resolveAISettings(aiSet);
 
   // Determine learning scope. By default, learning is isolated per campaign.
   // If the campaign has share_learning=true (or the run has no campaign), fall back to user-wide learning.
@@ -426,7 +422,7 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
     if (!state.analyze_previous?.done) {
       await persistStepState(sb, runId, state, "analyze_previous");
       await refreshHeartbeat(sb, runId, channelId);
-      const report = await stepAnalyzePrevious(sb, userId, runId, apiKey, model, promptVer.learning_prompt);
+      const report = await stepAnalyzePrevious(sb, userId, runId, aiSettings, promptVer.learning_prompt);
       state.analyze_previous = { done: true, report };
       await persistStepState(sb, runId, state, "analyze_video");
     }
@@ -434,7 +430,7 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
     // Step: analyze video
     if (!state.analyze_video?.done) {
       await refreshHeartbeat(sb, runId, channelId);
-      const summary = await stepAnalyzeVideo(sb, userId, runId, queueUrl, apiKey, model, promptVer.vision_prompt);
+      const summary = await stepAnalyzeVideo(sb, userId, runId, queueUrl, aiSettings, promptVer.vision_prompt);
       state.analyze_video = { done: true, summary };
       await persistStepState(sb, runId, state, "strategy");
     }
@@ -453,7 +449,7 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
       ]);
 
       const { decision, strategyId } = await decideStrategy({
-        sb, userId, runId, apiKey, model, objective,
+        sb, userId, runId, aiSettings, objective,
         videoSummary: state.analyze_video!.summary,
         memoryTop: memRes.data ?? [],
         trends: trendRes.data ?? [],
@@ -468,7 +464,7 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
       await refreshHeartbeat(sb, runId, channelId);
       const baseline = await computeBaseline(sb, userId);
       const { predictionId } = await predictMetrics({
-        sb, userId, runId, apiKey, model,
+        sb, userId, runId, aiSettings,
         strategy: state.strategy!.decision,
         videoSummary: state.analyze_video!.summary,
         baseline,
@@ -481,7 +477,7 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
     if (!state.generate_caption?.done) {
       await sb.from("runs").update({ status: "generating" }).eq("id", runId);
       await refreshHeartbeat(sb, runId, channelId);
-      const caption = await stepGenerateCaption(sb, userId, runId, apiKey, state.analyze_video!.summary, promptVer.caption_prompt, state.strategy?.decision ?? null);
+      const caption = await stepGenerateCaption(sb, userId, runId, aiSettings, state.analyze_video!.summary, promptVer.caption_prompt, state.strategy?.decision ?? null);
       state.generate_caption = { done: true, caption };
       await persistStepState(sb, runId, state, "publish");
     }

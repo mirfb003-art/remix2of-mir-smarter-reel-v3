@@ -2,6 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getAllSettings, updateAiSettings } from "@/lib/settings.functions";
+import {
+  getProviderCatalog, updateAIProviders, runHealthCheck, getResolvedAISettings,
+} from "@/lib/ai-providers.functions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,8 +12,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, CheckCircle2, XCircle, Loader2, Sparkles, Eye } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/settings/ai")({ component: AiSettings });
 
@@ -29,11 +35,20 @@ const objectives = [
   { v: "custom", d: "Custom (describe below)" },
 ];
 
+type ProviderId = "google" | "lovable" | "openai" | "openrouter" | "cloudflare" | "groq" | "deepseek";
+
 function AiSettings() {
   const get = useServerFn(getAllSettings);
   const upd = useServerFn(updateAiSettings);
+  const getCatalog = useServerFn(getProviderCatalog);
+  const getResolved = useServerFn(getResolvedAISettings);
+  const updProviders = useServerFn(updateAIProviders);
+  const health = useServerFn(runHealthCheck);
   const qc = useQueryClient();
+
   const { data } = useQuery({ queryKey: ["settings"], queryFn: () => get() });
+  const { data: catalog } = useQuery({ queryKey: ["ai-catalog"], queryFn: () => getCatalog() });
+  const { data: resolved } = useQuery({ queryKey: ["ai-resolved"], queryFn: () => getResolved() });
 
   const [state, setState] = useState<any>(null);
   useEffect(() => { if (data?.ai) setState(data.ai); }, [data]);
@@ -55,66 +70,285 @@ function AiSettings() {
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">AI Objective & Style</h1>
-        <p className="text-sm text-muted-foreground">Every caption is optimized for this goal.</p>
+        <h1 className="text-2xl font-semibold tracking-tight">AI Objective & Providers</h1>
+        <p className="text-sm text-muted-foreground">Configure the goal, voice, and AI providers Loop uses.</p>
       </div>
 
+      <Tabs defaultValue="objective">
+        <TabsList>
+          <TabsTrigger value="objective">Objective & Voice</TabsTrigger>
+          <TabsTrigger value="providers">AI Providers</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="objective" className="space-y-6 pt-4">
+          <Card>
+            <CardHeader><CardTitle>Objective</CardTitle><CardDescription>What should Loop optimize for?</CardDescription></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1"><Label>Primary objective</Label>
+                  <Select value={state.objective} onValueChange={(v) => setState({ ...state, objective: v })}>
+                    <SelectTrigger><SelectValue/></SelectTrigger>
+                    <SelectContent>{objectives.map(o => <SelectItem key={o.v} value={o.v}>{o.d}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1"><Label>Language</Label><Input value={state.language} onChange={(e) => setState({ ...state, language: e.target.value })}/></div>
+              </div>
+              {state.objective === "custom" && (
+                <div className="space-y-1"><Label>Custom objective</Label>
+                  <Input value={state.custom_objective ?? ""} onChange={(e) => setState({ ...state, custom_objective: e.target.value })} placeholder="e.g. drive newsletter signups"/></div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>Voice</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1"><Label>Brand tone</Label>
+                <Input value={state.brand_tone} onChange={(e) => setState({ ...state, brand_tone: e.target.value })} placeholder="witty, direct, curious"/></div>
+              <div className="space-y-1"><Label>Default hashtags (comma-separated)</Label>
+                <Input value={(state.default_hashtags ?? []).join(", ")} onChange={(e) => setState({ ...state, default_hashtags: e.target.value.split(",").map((s: string) => s.trim()).filter(Boolean) })} placeholder="#growth, #startup"/></div>
+              <div className="space-y-1"><Label>Extra instructions</Label>
+                <Textarea rows={4} value={state.user_instructions ?? ""} onChange={(e) => setState({ ...state, user_instructions: e.target.value })} placeholder="Anything else the AI should always know."/></div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>Generation</CardTitle></CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2 md:col-span-2">
+                <div className="flex items-center justify-between"><Label>Creativity (temperature)</Label><span className="text-xs text-muted-foreground">{Number(state.temperature).toFixed(2)}</span></div>
+                <Slider min={0} max={1.5} step={0.05} value={[Number(state.temperature)]} onValueChange={([v]) => setState({ ...state, temperature: v })}/>
+              </div>
+              <div className="space-y-1"><Label>Max caption length</Label>
+                <Input type="number" value={state.max_caption_length} onChange={(e) => setState({ ...state, max_caption_length: Number(e.target.value) })}/></div>
+            </CardContent>
+          </Card>
+
+          <Button onClick={() => mut.mutate()}>Save AI settings</Button>
+        </TabsContent>
+
+        <TabsContent value="providers" className="pt-4">
+          {catalog && resolved ? (
+            <ProvidersPanel
+              catalog={catalog}
+              initial={resolved}
+              onSave={async (payload) => {
+                await updProviders({ data: payload });
+                toast.success("Providers saved");
+                qc.invalidateQueries({ queryKey: ["ai-resolved"] });
+              }}
+              onHealth={async (cfg) => health({ data: cfg })}
+            />
+          ) : (
+            <div className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin"/>Loading provider catalog…</div>
+          )}
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+interface ProviderCfg { id: ProviderId; apiKey: string; selectedModel: string; baseUrl?: string | null; accountId?: string | null }
+interface ResolvedAI {
+  mode: "strict" | "fallback";
+  activeProvider: ProviderId;
+  fallbackChain: ProviderId[];
+  providers: Partial<Record<ProviderId, ProviderCfg>>;
+}
+interface Catalog {
+  meta: Record<ProviderId, { name: string; needsAccountId?: boolean; note?: string }>;
+  models: Record<ProviderId, Array<{ id: string; name: string; vision: boolean; isRecommended?: boolean }>>;
+}
+
+function ProvidersPanel({
+  catalog, initial, onSave, onHealth,
+}: {
+  catalog: Catalog; initial: ResolvedAI;
+  onSave: (p: ResolvedAI) => Promise<void>;
+  onHealth: (c: ProviderCfg) => Promise<{ ok: boolean; latencyMs: number; error?: string; sample?: string }>;
+}) {
+  const [mode, setMode] = useState<"strict" | "fallback">(initial.mode);
+  const [active, setActive] = useState<ProviderId>(initial.activeProvider);
+  const [chain, setChain] = useState<ProviderId[]>(initial.fallbackChain);
+  const [providers, setProviders] = useState<Partial<Record<ProviderId, ProviderCfg>>>(initial.providers);
+  const [saving, setSaving] = useState(false);
+  const [health, setHealth] = useState<Record<string, { ok: boolean; latencyMs: number; error?: string; sample?: string; loading?: boolean }>>({});
+  const [showKey, setShowKey] = useState<Record<string, boolean>>({});
+
+  const allProviderIds = useMemo(() => Object.keys(catalog.meta) as ProviderId[], [catalog]);
+
+  const ensureCfg = (id: ProviderId): ProviderCfg => providers[id] ?? {
+    id, apiKey: "", selectedModel: catalog.models[id]?.[0]?.id ?? "",
+  };
+
+  const patch = (id: ProviderId, next: Partial<ProviderCfg>) => {
+    setProviders({ ...providers, [id]: { ...ensureCfg(id), ...next } });
+  };
+
+  const moveChain = (idx: number, dir: -1 | 1) => {
+    const j = idx + dir;
+    if (j < 0 || j >= chain.length) return;
+    const c = [...chain];
+    [c[idx], c[j]] = [c[j], c[idx]];
+    setChain(c);
+  };
+
+  const toggleInChain = (id: ProviderId) => {
+    setChain(chain.includes(id) ? chain.filter((x) => x !== id) : [...chain, id]);
+  };
+
+  const runHealth = async (id: ProviderId) => {
+    const cfg = ensureCfg(id);
+    setHealth((h) => ({ ...h, [id]: { ...(h[id] ?? { ok: false, latencyMs: 0 }), loading: true } }));
+    try {
+      const res = await onHealth(cfg);
+      setHealth((h) => ({ ...h, [id]: { ...res, loading: false } }));
+    } catch (e) {
+      setHealth((h) => ({ ...h, [id]: { ok: false, latencyMs: 0, error: e instanceof Error ? e.message : "failed", loading: false } }));
+    }
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await onSave({ mode, activeProvider: active, fallbackChain: chain, providers });
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="space-y-6">
       <Card>
-        <CardHeader><CardTitle>Objective</CardTitle><CardDescription>What should Loop optimize for?</CardDescription></CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-1"><Label>Primary objective</Label>
-              <Select value={state.objective} onValueChange={(v) => setState({ ...state, objective: v })}>
+        <CardHeader>
+          <CardTitle>Execution Mode</CardTitle>
+          <CardDescription>Strict uses only your active provider. Fallback tries the ranked chain until one succeeds.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex gap-2 flex-wrap">
+            <Button variant={mode === "strict" ? "default" : "outline"} onClick={() => setMode("strict")}>Strict (Single Provider)</Button>
+            <Button variant={mode === "fallback" ? "default" : "outline"} onClick={() => setMode("fallback")}>Fallback Chain (Resilient)</Button>
+          </div>
+          {mode === "strict" ? (
+            <div className="space-y-1 max-w-sm">
+              <Label>Active provider</Label>
+              <Select value={active} onValueChange={(v) => setActive(v as ProviderId)}>
                 <SelectTrigger><SelectValue/></SelectTrigger>
-                <SelectContent>{objectives.map(o => <SelectItem key={o.v} value={o.v}>{o.d}</SelectItem>)}</SelectContent>
+                <SelectContent>
+                  {allProviderIds.map((id) => <SelectItem key={id} value={id}>{catalog.meta[id].name}</SelectItem>)}
+                </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1"><Label>Language</Label><Input value={state.language} onChange={(e) => setState({ ...state, language: e.target.value })}/></div>
-          </div>
-          {state.objective === "custom" && (
-            <div className="space-y-1"><Label>Custom objective</Label>
-              <Input value={state.custom_objective ?? ""} onChange={(e) => setState({ ...state, custom_objective: e.target.value })} placeholder="e.g. drive newsletter signups"/></div>
+          ) : (
+            <div className="space-y-2">
+              <Label>Fallback order</Label>
+              <div className="space-y-1">
+                {chain.map((id, idx) => (
+                  <div key={id} className="flex items-center gap-2 rounded-md border p-2">
+                    <span className="text-xs font-mono text-muted-foreground w-6">{idx + 1}.</span>
+                    <span className="flex-1 text-sm">{catalog.meta[id].name}</span>
+                    <Button size="icon" variant="ghost" onClick={() => moveChain(idx, -1)}><ArrowUp className="h-4 w-4"/></Button>
+                    <Button size="icon" variant="ghost" onClick={() => moveChain(idx, 1)}><ArrowDown className="h-4 w-4"/></Button>
+                    <Button size="sm" variant="outline" onClick={() => toggleInChain(id)}>Remove</Button>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-1 pt-1">
+                {allProviderIds.filter((id) => !chain.includes(id)).map((id) => (
+                  <Button key={id} size="sm" variant="outline" onClick={() => toggleInChain(id)}>+ {catalog.meta[id].name}</Button>
+                ))}
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle>Voice</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1"><Label>Brand tone</Label>
-            <Input value={state.brand_tone} onChange={(e) => setState({ ...state, brand_tone: e.target.value })} placeholder="witty, direct, curious"/></div>
-          <div className="space-y-1"><Label>Default hashtags (comma-separated)</Label>
-            <Input value={(state.default_hashtags ?? []).join(", ")} onChange={(e) => setState({ ...state, default_hashtags: e.target.value.split(",").map((s: string) => s.trim()).filter(Boolean) })} placeholder="#growth, #startup"/></div>
-          <div className="space-y-1"><Label>Extra instructions</Label>
-            <Textarea rows={4} value={state.user_instructions ?? ""} onChange={(e) => setState({ ...state, user_instructions: e.target.value })} placeholder="Anything else the AI should always know."/></div>
-        </CardContent>
-      </Card>
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Providers & API keys</h2>
+        {allProviderIds.map((id) => {
+          const meta = catalog.meta[id];
+          const cfg = ensureCfg(id);
+          const models = catalog.models[id] ?? [];
+          const h = health[id];
+          return (
+            <Card key={id}>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between gap-2 flex-wrap">
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      {meta.name}
+                      {id === "lovable" && <Badge variant="secondary">Default</Badge>}
+                      {mode === "strict" && active === id && <Badge>Active</Badge>}
+                      {mode === "fallback" && chain.includes(id) && <Badge variant="outline">#{chain.indexOf(id) + 1}</Badge>}
+                    </CardTitle>
+                    {meta.note && <CardDescription>{meta.note}</CardDescription>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {h && !h.loading && (
+                      h.ok
+                        ? <Badge className="gap-1"><CheckCircle2 className="h-3 w-3"/>OK · {h.latencyMs}ms</Badge>
+                        : <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3"/>Failed</Badge>
+                    )}
+                    <Button size="sm" variant="outline" disabled={h?.loading} onClick={() => runHealth(id)}>
+                      {h?.loading ? <Loader2 className="h-4 w-4 animate-spin"/> : "Run Health Check"}
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1 md:col-span-2">
+                  <Label>API Key {id === "lovable" && <span className="text-xs text-muted-foreground">(auto — leave blank to use workspace key)</span>}</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type={showKey[id] ? "text" : "password"}
+                      value={cfg.apiKey}
+                      onChange={(e) => patch(id, { apiKey: e.target.value })}
+                      placeholder={id === "lovable" ? "Uses LOVABLE_API_KEY from workspace" : "sk-..."}
+                    />
+                    <Button size="icon" variant="outline" onClick={() => setShowKey({ ...showKey, [id]: !showKey[id] })}>
+                      <Eye className="h-4 w-4"/>
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label>Model</Label>
+                  <Select value={cfg.selectedModel} onValueChange={(v) => patch(id, { selectedModel: v })}>
+                    <SelectTrigger><SelectValue/></SelectTrigger>
+                    <SelectContent>
+                      {models.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>
+                          <span className="flex items-center gap-2">
+                            {m.name}
+                            {m.vision && <Badge variant="outline" className="h-4 text-[10px]">Vision</Badge>}
+                            {m.isRecommended && <Sparkles className="h-3 w-3 text-primary"/>}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {meta.needsAccountId && (
+                  <div className="space-y-1">
+                    <Label>Account ID</Label>
+                    <Input value={cfg.accountId ?? ""} onChange={(e) => patch(id, { accountId: e.target.value })} placeholder="Cloudflare Account ID"/>
+                  </div>
+                )}
+                {h && !h.ok && h.error && (
+                  <div className="md:col-span-2 text-xs text-destructive rounded border border-destructive/30 bg-destructive/5 p-2">
+                    {h.error}
+                  </div>
+                )}
+                {h && h.ok && h.sample && (
+                  <div className="md:col-span-2 text-xs text-muted-foreground">Sample response: <span className="font-mono">{h.sample}</span></div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
 
-      <Card>
-        <CardHeader><CardTitle>Model</CardTitle></CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-3">
-          <div className="space-y-1 md:col-span-1"><Label>Model</Label>
-            <Select value={state.model} onValueChange={(v) => setState({ ...state, model: v })}>
-              <SelectTrigger><SelectValue/></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="google/gemini-2.5-flash">Gemini 2.5 Flash (default)</SelectItem>
-                <SelectItem value="google/gemini-2.5-pro">Gemini 2.5 Pro</SelectItem>
-                <SelectItem value="google/gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</SelectItem>
-                <SelectItem value="openai/gpt-5-mini">GPT-5 mini</SelectItem>
-                <SelectItem value="openai/gpt-5">GPT-5</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2 md:col-span-2">
-            <div className="flex items-center justify-between"><Label>Creativity (temperature)</Label><span className="text-xs text-muted-foreground">{Number(state.temperature).toFixed(2)}</span></div>
-            <Slider min={0} max={1.5} step={0.05} value={[Number(state.temperature)]} onValueChange={([v]) => setState({ ...state, temperature: v })}/>
-          </div>
-          <div className="space-y-1"><Label>Max caption length</Label>
-            <Input type="number" value={state.max_caption_length} onChange={(e) => setState({ ...state, max_caption_length: Number(e.target.value) })}/></div>
-        </CardContent>
-      </Card>
-
-      <Button onClick={() => mut.mutate()}>Save AI settings</Button>
+      <Button onClick={save} disabled={saving}>
+        {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2"/> : null}
+        Save providers
+      </Button>
     </div>
   );
 }
