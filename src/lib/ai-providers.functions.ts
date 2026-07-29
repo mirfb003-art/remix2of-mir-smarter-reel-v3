@@ -60,3 +60,18 @@ export const getResolvedAISettings = createServerFn({ method: "GET" })
     const { data } = await context.supabase.from("ai_settings").select("*").eq("user_id", context.userId).maybeSingle();
     return resolveAISettings(data);
   });
+
+export const discoverGeminiModels = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({
+      apiKey: z.string().min(1, "API key required"),
+      verify: z.boolean().optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const { discoverAndVerifyGeminiModels } = await import("./providers/gemini-verifier");
+    const models = await discoverAndVerifyGeminiModels(data.apiKey, { verify: data.verify ?? true });
+    return { models };
+  });
+
