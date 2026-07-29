@@ -65,7 +65,7 @@ async function persistStepState(sb: Sb, runId: string, state: StepState, current
 
 // -------- Step implementations --------
 
-async function stepAnalyzePrevious(sb: Sb, userId: string, runId: string, apiKey: string, model: string, learningPrompt: string) {
+async function stepAnalyzePrevious(sb: Sb, userId: string, runId: string, aiSettings: AISettingsSchema, learningPrompt: string) {
   const { data: prev } = await sb.from("runs")
     .select(`id, captions(text,hashtags,cta,hook,length),
       published_posts(post_analytics(views,likes,comments,shares,saves,reach,impressions))`)
@@ -76,19 +76,18 @@ async function stepAnalyzePrevious(sb: Sb, userId: string, runId: string, apiKey
   const analytics = (prev as any).published_posts?.[0]?.post_analytics?.[0];
   if (!cap) return null;
 
-  const provider = createAiGateway(apiKey);
   const t0 = Date.now();
   const result = await withRetry("ai",
-    async () => generateText({
-      model: provider(model),
+    async () => executeAIRequest(aiSettings, (model) => generateText({
+      model,
       prompt: `${learningPrompt}\n\nPrevious caption: ${JSON.stringify(cap)}\nAnalytics: ${JSON.stringify(analytics ?? {})}`,
-    }),
+    })),
     async (attempt, err, durationMs) => {
       await audit(sb, {
         userId, runId, eventType: err ? "ai.retry" : "ai.response",
         module: "ai", attempt, status: err ? "error" : "success", durationMs,
         error: err instanceof Error ? err.message : err ? String(err) : null,
-        payload: { purpose: "learning_report", model },
+        payload: { purpose: "learning_report", mode: aiSettings.mode },
       });
     },
   );
