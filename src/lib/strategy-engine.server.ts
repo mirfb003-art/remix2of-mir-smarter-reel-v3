@@ -47,17 +47,16 @@ export function scoreByObjective(objective: string, analytics: Record<string, nu
 }
 
 export async function decideStrategy({
-  sb, userId, runId, apiKey, model, objective, videoSummary, memoryTop, trends, recentReports,
+  sb, userId, runId, aiSettings, objective, videoSummary, memoryTop, trends, recentReports,
 }: {
   sb: Sb; userId: string; runId: string;
-  apiKey: string; model: string; objective: string;
+  aiSettings: AISettingsSchema; objective: string;
   videoSummary: any;
   memoryTop: Array<{ category: string; insight: string; confidence: number }>;
   trends: Array<{ dimension: string; value: string; metric: string; lift_pct: number | null; human_summary: string | null }>;
   recentReports: Array<{ worked: boolean | null; cause: string | null; change_recommendation: string | null }>;
 }): Promise<{ decision: StrategyDecision; strategyId: string }> {
 
-  const provider = createAiGateway(apiKey);
   const prompt = `You are the Strategy Engine for an adaptive video publisher.
 Return ONLY compact JSON with keys:
 { "hook_style", "caption_length", "cta_type", "emoji_level", "storytelling",
@@ -89,16 +88,19 @@ Choose the strategy most likely to move the ${objective} metric for this specifi
 
   const t0 = Date.now();
   const result = await withRetry("ai",
-    async () => generateText({ model: provider(model), temperature: 0.4, prompt }),
+    async () => executeAIRequest(aiSettings, (model, ctx) =>
+      generateText({ model, temperature: 0.4, prompt })
+        .then((r) => ({ ...r, _providerId: ctx.providerId, _modelId: ctx.modelId }))),
     async (attempt, err, durationMs) => {
       await audit(sb, {
         userId, runId, eventType: err ? "ai.retry" : "ai.response",
         module: "ai", attempt, status: err ? "error" : "success", durationMs,
         error: err instanceof Error ? err.message : err ? String(err) : null,
-        payload: { purpose: "strategy", model },
+        payload: { purpose: "strategy", mode: aiSettings.mode },
       });
     },
   );
+
 
   let parsed: any = {};
   try { parsed = JSON.parse(result.text.replace(/^```json\s*/i, "").replace(/```$/,"").trim()); }
