@@ -91,7 +91,7 @@ async function stepAnalyzePrevious(sb: Sb, userId: string, runId: string, aiSett
       });
     },
   );
-  const text = result.text;
+  const text = typeof result?.text === "string" ? result.text : "";
   let report: any = {};
   try { report = JSON.parse(text.replace(/^```json\s*/i,"").replace(/```$/,"").trim()); } catch { report = { cause: text.slice(0,300) }; }
 
@@ -155,7 +155,7 @@ async function stepAnalyzeVideo(sb: Sb, userId: string, runId: string, url: stri
       });
     },
   );
-  const text = result.text;
+  const text = typeof result?.text === "string" ? result.text : "";
   let parsed: Record<string, unknown> = {};
   try { parsed = JSON.parse(text.replace(/^```json\s*/i,"").replace(/```$/i,"").trim()); }
   catch { parsed = { summary: text.slice(0, 500) }; }
@@ -229,9 +229,10 @@ Return JSON: { "caption", "hook", "cta", "hashtags": [...], "style_tags": [...] 
       });
     },
   );
+  const captionText = typeof result?.text === "string" ? result.text : "";
   let out: any = {};
-  try { out = JSON.parse(result.text.replace(/^```json\s*/i,"").replace(/```$/,"").trim()); }
-  catch { out = { caption: result.text.slice(0, ai?.max_caption_length ?? 2200) }; }
+  try { out = JSON.parse(captionText.replace(/^```json\s*/i,"").replace(/```$/,"").trim()); }
+  catch { out = { caption: captionText.slice(0, ai?.max_caption_length ?? 2200) }; }
 
   await sb.from("captions").insert({
     run_id: runId, user_id: userId,
