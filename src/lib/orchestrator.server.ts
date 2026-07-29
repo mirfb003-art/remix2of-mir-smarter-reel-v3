@@ -384,9 +384,8 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
   const channelId = channel.id;
   const campaignId: string | null = run.campaign_id ?? null;
   const t0 = Date.now();
-  const apiKey = requireLovableApiKey();
-  const { data: aiSet } = await sb.from("ai_settings").select("model,objective").eq("user_id", userId).maybeSingle();
-  const model = aiSet?.model ?? "google/gemini-3-flash-preview";
+  const { data: aiSet } = await sb.from("ai_settings").select("*").eq("user_id", userId).maybeSingle();
+  const aiSettings = resolveAISettings(aiSet);
 
   // Determine learning scope. By default, learning is isolated per campaign.
   // If the campaign has share_learning=true (or the run has no campaign), fall back to user-wide learning.
