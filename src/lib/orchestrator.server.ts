@@ -350,7 +350,7 @@ export async function runOrchestrator({
       step_state: {} as never,
       heartbeat_at: new Date().toISOString(),
       attempts: 1,
-      prompt_version_id: promptVer.id,
+      prompt_version_id: promptVer.id === "builtin-default" ? null : promptVer.id,
     }).select("*").single();
     if (runErr || !run) throw new Error(runErr?.message ?? "Failed to create run");
     runId = run.id;
