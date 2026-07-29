@@ -102,9 +102,10 @@ Choose the strategy most likely to move the ${objective} metric for this specifi
   );
 
 
+  const rawText = typeof result?.text === "string" ? result.text : "";
   let parsed: any = {};
-  try { parsed = JSON.parse(result.text.replace(/^```json\s*/i, "").replace(/```$/,"").trim()); }
-  catch { parsed = { reasoning: result.text.slice(0, 400) }; }
+  try { parsed = JSON.parse(rawText.replace(/^```json\s*/i, "").replace(/```$/,"").trim()); }
+  catch { parsed = { reasoning: rawText.slice(0, 400) }; }
 
   const decision: StrategyDecision = {
     hook_style: String(parsed.hook_style ?? "curiosity"),
