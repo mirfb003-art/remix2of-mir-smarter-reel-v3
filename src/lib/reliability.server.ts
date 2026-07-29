@@ -115,6 +115,18 @@ export interface PromptVersion {
   learning_prompt: string;
   caption_prompt: string;
 }
+const FALLBACK_PROMPTS: PromptVersion = {
+  id: "builtin-default",
+  name: "default",
+  version: 1,
+  vision_prompt:
+    'Analyze this short-form video (frames sampled below). Return STRICT JSON only, no prose, matching this shape: {"summary":string,"objects":string[],"people":string,"scene":string,"actions":string[],"emotions":string[],"topic":string,"story":string,"message":string}',
+  learning_prompt:
+    "You are a social-media performance analyst. Given the previous post's caption and metrics, produce STRICT JSON only with fields: worked, hook_verdict, length_verdict, emoji_verdict, hashtag_verdict, cta_verdict, cause, change_recommendation, new_insights[]{category,insight,confidence}",
+  caption_prompt:
+    'You are Loop, an adaptive short-form caption engine. Blend objective, brand tone, durable learnings, and current video understanding. Return STRICT JSON only: {"caption":string,"hook":string,"cta":string,"hashtags":string[],"style_tags":string[]}',
+};
+
 export async function getActivePromptVersion(sb: Sb, userId: string): Promise<PromptVersion> {
   // Prefer user-owned active row, fall back to system default.
   const { data: mine } = await sb.from("prompt_versions")
@@ -126,9 +138,11 @@ export async function getActivePromptVersion(sb: Sb, userId: string): Promise<Pr
     .select("id,name,version,vision_prompt,learning_prompt,caption_prompt")
     .is("user_id", null).eq("active", true)
     .order("version", { ascending: false }).limit(1).maybeSingle();
-  if (!sys) throw new Error("No active prompt version found");
-  return sys as PromptVersion;
+  if (sys) return sys as PromptVersion;
+  // Never block a run: use built-in prompts when no row exists.
+  return FALLBACK_PROMPTS;
 }
+
 
 // -------- Idempotency helpers --------
 export function makeIdempotencyKey(parts: Array<string | number>): string {
