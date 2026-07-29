@@ -166,12 +166,19 @@ interface Catalog {
   models: Record<ProviderId, Array<{ id: string; name: string; vision: boolean; isRecommended?: boolean }>>;
 }
 
+interface DiscoveredModel {
+  id: string; displayName: string;
+  status: "working" | "failed" | "untested";
+  latencyMs: number; error: string | null; supportsVision: boolean;
+}
+
 function ProvidersPanel({
-  catalog, initial, onSave, onHealth,
+  catalog, initial, onSave, onHealth, onDiscover,
 }: {
   catalog: Catalog; initial: ResolvedAI;
   onSave: (p: ResolvedAI) => Promise<void>;
   onHealth: (c: ProviderCfg) => Promise<{ ok: boolean; latencyMs: number; error?: string; sample?: string }>;
+  onDiscover: (apiKey: string) => Promise<DiscoveredModel[]>;
 }) {
   const [mode, setMode] = useState<"strict" | "fallback">(initial.mode);
   const [active, setActive] = useState<ProviderId>(initial.activeProvider);
@@ -180,8 +187,14 @@ function ProvidersPanel({
   const [saving, setSaving] = useState(false);
   const [health, setHealth] = useState<Record<string, { ok: boolean; latencyMs: number; error?: string; sample?: string; loading?: boolean }>>({});
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
+  const [discovered, setDiscovered] = useState<DiscoveredModel[] | null>(null);
+  const [discovering, setDiscovering] = useState(false);
+  const [discoverError, setDiscoverError] = useState<string | null>(null);
+  const [lastDiscoveredKey, setLastDiscoveredKey] = useState<string>("");
 
   const allProviderIds = useMemo(() => Object.keys(catalog.meta) as ProviderId[], [catalog]);
+
+
 
   const ensureCfg = (id: ProviderId): ProviderCfg => providers[id] ?? {
     id, apiKey: "", selectedModel: catalog.models[id]?.[0]?.id ?? "",
