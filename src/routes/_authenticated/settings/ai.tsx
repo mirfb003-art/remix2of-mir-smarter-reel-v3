@@ -375,7 +375,12 @@ function ProvidersPanel({
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <Label>Model</Label>
+                  <Label className="flex items-center gap-2">
+                    Model
+                    {isGoogle && discovered?.length ? (
+                      <span className="text-[10px] text-muted-foreground">(auto-discovered)</span>
+                    ) : null}
+                  </Label>
                   <Select value={cfg.selectedModel} onValueChange={(v) => patch(id, { selectedModel: v })}>
                     <SelectTrigger><SelectValue/></SelectTrigger>
                     <SelectContent>
@@ -384,13 +389,59 @@ function ProvidersPanel({
                           <span className="flex items-center gap-2">
                             {m.name}
                             {m.vision && <Badge variant="outline" className="h-4 text-[10px]">Vision</Badge>}
-                            {m.isRecommended && <Sparkles className="h-3 w-3 text-primary"/>}
+                            {m.status === "working" && <CheckCircle2 className="h-3 w-3 text-primary"/>}
+                            {m.status === "failed" && <XCircle className="h-3 w-3 text-destructive"/>}
+                            {m.status === "untested" && <Clock className="h-3 w-3 text-muted-foreground"/>}
+                            {!m.status && m.isRecommended && <Sparkles className="h-3 w-3 text-primary"/>}
                           </span>
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
+                {isGoogle && (
+                  <div className="md:col-span-2 space-y-2 rounded-md border p-3">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div>
+                        <p className="text-sm font-medium">Model auto-discovery & live verification</p>
+                        <p className="text-xs text-muted-foreground">
+                          Lists every model your key can call and pings each one to confirm it really works.
+                        </p>
+                      </div>
+                      <Button size="sm" variant="outline" disabled={discovering || !cfg.apiKey}
+                        onClick={() => runDiscovery(cfg.apiKey)}>
+                        {discovering
+                          ? <><Loader2 className="h-4 w-4 animate-spin mr-2"/>Verifying…</>
+                          : <><RefreshCw className="h-4 w-4 mr-2"/>Discover & verify</>}
+                      </Button>
+                    </div>
+                    {discoverError && (
+                      <div className="text-xs text-destructive rounded border border-destructive/30 bg-destructive/5 p-2">{discoverError}</div>
+                    )}
+                    {discovered && (
+                      <div className="max-h-64 overflow-auto rounded border divide-y">
+                        {discovered.map((m) => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => patch("google", { selectedModel: m.id })}
+                            className={`w-full text-left flex items-center gap-2 px-2 py-1.5 text-xs hover:bg-muted/60 ${cfg.selectedModel === m.id ? "bg-muted" : ""}`}
+                          >
+                            {m.status === "working" && <CheckCircle2 className="h-3.5 w-3.5 text-primary shrink-0"/>}
+                            {m.status === "failed" && <XCircle className="h-3.5 w-3.5 text-destructive shrink-0"/>}
+                            {m.status === "untested" && <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0"/>}
+                            <span className="font-mono truncate flex-1">{m.id}</span>
+                            {m.supportsVision && <Badge variant="outline" className="h-4 text-[10px]">Vision</Badge>}
+                            <span className="text-muted-foreground w-14 text-right">
+                              {m.status === "working" ? `${m.latencyMs}ms` : m.status === "failed" ? "failed" : "—"}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {meta.needsAccountId && (
                   <div className="space-y-1">
                     <Label>Account ID</Label>
