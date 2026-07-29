@@ -2,7 +2,7 @@
 // Step-based state machine — resumes from last completed step on retry.
 import { generateText } from "ai";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createAiGateway, requireLovableApiKey } from "./ai-gateway.server";
+import { executeAIRequest, resolveAISettings, type AISettingsSchema } from "./ai-gateway.server";
 import {
   withRetry, audit, acquireChannelLock, releaseChannelLock,
   refreshHeartbeat, getActivePromptVersion, makeIdempotencyKey,
