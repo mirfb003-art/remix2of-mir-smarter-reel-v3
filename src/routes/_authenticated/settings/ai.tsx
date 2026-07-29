@@ -321,8 +321,19 @@ function ProvidersPanel({
         {allProviderIds.map((id) => {
           const meta = catalog.meta[id];
           const cfg = ensureCfg(id);
-          const models = catalog.models[id] ?? [];
+          const isGoogle = id === "google";
+          const models = isGoogle && discovered?.length
+            ? discovered.map((m) => ({
+                id: m.id,
+                name: m.displayName,
+                vision: m.supportsVision,
+                isRecommended: m.status === "working",
+                status: m.status,
+                latencyMs: m.latencyMs,
+              }))
+            : (catalog.models[id] ?? []).map((m) => ({ ...m, status: undefined as undefined | string, latencyMs: 0 }));
           const h = health[id];
+
           return (
             <Card key={id}>
               <CardHeader className="pb-3">
