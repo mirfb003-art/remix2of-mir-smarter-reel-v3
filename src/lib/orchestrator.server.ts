@@ -422,7 +422,7 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
     if (!state.analyze_previous?.done) {
       await persistStepState(sb, runId, state, "analyze_previous");
       await refreshHeartbeat(sb, runId, channelId);
-      const report = await stepAnalyzePrevious(sb, userId, runId, apiKey, model, promptVer.learning_prompt);
+      const report = await stepAnalyzePrevious(sb, userId, runId, aiSettings, promptVer.learning_prompt);
       state.analyze_previous = { done: true, report };
       await persistStepState(sb, runId, state, "analyze_video");
     }
