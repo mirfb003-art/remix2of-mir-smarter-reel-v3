@@ -34,6 +34,23 @@ function cloudinaryThumb(url: string, offset = "auto"): string {
   return `${m[1]}so_${offset},w_640,c_fill,q_auto,f_jpg/${rest}`;
 }
 
+// Keep only frames Cloudinary can actually render; a bad offset returns 400 and
+// breaks the whole vision call.
+async function usableFrames(urls: string[]): Promise<string[]> {
+  const checked = await Promise.all(
+    urls.map(async (u) => {
+      try {
+        const res = await fetch(u, { method: "GET", headers: { Range: "bytes=0-0" } });
+        return res.ok || res.status === 206 ? u : null;
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return checked.filter((u): u is string => Boolean(u));
+}
+
+
 async function log(sb: Sb, userId: string, runId: string | null, level: string, module: string, message: string, meta?: unknown) {
   await sb.from("logs").insert({ user_id: userId, run_id: runId, level, module, message, meta: (meta ?? null) as never });
 }
