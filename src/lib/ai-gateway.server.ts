@@ -178,12 +178,14 @@ export function resolveAISettings(row: any | null | undefined): AISettingsSchema
   }
   const mode = (row?.provider_mode === "fallback" ? "fallback" : "strict") as "strict" | "fallback";
   const activeProvider = (row?.active_provider as ProviderId) || "lovable";
-  const chainRaw = Array.isArray(row?.fallback_chain) ? (row.fallback_chain as ProviderId[]) : ["lovable"];
-  const fallbackChain = chainRaw.filter((id) => !!providers[id]);
+  const chainRaw = Array.isArray(row?.fallback_chain) ? (row.fallback_chain as unknown[]) : ["lovable"];
+  const fallbackChain = chainRaw
+    .map((v) => String(v) as ProviderId)
+    .filter((id) => !!providers[id]);
   return {
     mode,
     activeProvider: providers[activeProvider] ? activeProvider : "lovable",
-    fallbackChain: fallbackChain.length ? fallbackChain : ["lovable"],
+    fallbackChain: (fallbackChain.length ? fallbackChain : ["lovable"]) as ProviderId[],
     providers,
   };
 }
