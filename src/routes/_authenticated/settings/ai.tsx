@@ -142,6 +142,8 @@ function AiSettings() {
                 qc.invalidateQueries({ queryKey: ["ai-resolved"] });
               }}
               onHealth={async (cfg) => health({ data: cfg })}
+              onDiscover={async (apiKey) => (await discover({ data: { apiKey, verify: true } })).models}
+
             />
           ) : (
             <div className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin"/>Loading provider catalog…</div>
