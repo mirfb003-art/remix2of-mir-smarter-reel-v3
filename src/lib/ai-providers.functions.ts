@@ -30,15 +30,17 @@ export const updateAIProviders = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => providersSchema.parse(d))
   .handler(async ({ data, context }) => {
-    const { error } = await context.supabase.from("ai_settings").update({
+    const { error } = await context.supabase.from("ai_settings").upsert({
+      user_id: context.userId,
       provider_mode: data.mode,
       active_provider: data.activeProvider,
       fallback_chain: data.fallbackChain as never,
       providers_config: data.providers as never,
-    }).eq("user_id", context.userId);
+    }, { onConflict: "user_id" });
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
 
 export const runHealthCheck = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
