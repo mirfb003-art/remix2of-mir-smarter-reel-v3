@@ -227,6 +227,42 @@ function ProvidersPanel({
     }
   };
 
+  const googleKey = providers.google?.apiKey ?? "";
+
+  const runDiscovery = async (apiKey: string) => {
+    if (!apiKey) return;
+    setDiscovering(true);
+    setDiscoverError(null);
+    setLastDiscoveredKey(apiKey);
+    try {
+      const models = await onDiscover(apiKey);
+      setDiscovered(models);
+      const working = models.filter((m) => m.status === "working");
+      toast.success(`Discovered ${models.length} models — ${working.length} verified working`);
+      // Auto-select a working model if the current one isn't verified.
+      const current = providers.google?.selectedModel;
+      if (working.length && !working.some((m) => m.id === current)) {
+        const best = working.find((m) => m.supportsVision) ?? working[0];
+        patch("google", { selectedModel: best.id });
+      }
+    } catch (e) {
+      setDiscovered(null);
+      setDiscoverError(e instanceof Error ? e.message : "Discovery failed");
+      toast.error(e instanceof Error ? e.message : "Discovery failed");
+    } finally {
+      setDiscovering(false);
+    }
+  };
+
+  // Auto-discover shortly after the Google key is entered/updated.
+  useEffect(() => {
+    if (!googleKey || googleKey.length < 20 || googleKey === lastDiscoveredKey) return;
+    const t = setTimeout(() => { void runDiscovery(googleKey); }, 900);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleKey]);
+
+
   const save = async () => {
     setSaving(true);
     try {
