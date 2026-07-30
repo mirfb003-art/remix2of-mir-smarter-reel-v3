@@ -87,21 +87,54 @@ export function makeBufferClient(token: string, endpoint: string): BufferClient 
         return { ok: false, hasCreatePost: false, mutationName: null, inputFields: [], message: e instanceof Error ? e.message : String(e) };
       }
     },
-    async createPost({ channelId, text, mediaUrl }) {
-      // Standard Buffer publish mutation. Users on different Buffer versions can adjust their endpoint.
-      const data = await gql<{ createPost: { id: string } }>(
-        `mutation CreatePost($organizationId: String, $channels: [String!]!, $text: String!, $media: [MediaInput!]) {
-          createPost(input: { channels: $channels, text: $text, media: $media, schedulingType: NOW }) {
-            id
-          }
+    async createPost({ channelId, text, mediaUrl, mode = "addToQueue", dueAt = null }) {
+      const schema = await introspect(gql);
+
+      // ShareMode is required by CreatePostInput. Map our mode onto the real enum values.
+      const pickEnum = (values: string[], patterns: RegExp[], fallback?: string) => {
+        for (const p of patterns) {
+          const hit = values.find((v) => p.test(v));
+          if (hit) return hit;
+        }
+        return fallback ?? values[0];
+      };
+      const shareMode =
+        mode === "shareNow"
+          ? pickEnum(schema.shareModes, [/now/i, /share/i])
+          : mode === "customScheduled"
+            ? pickEnum(schema.shareModes, [/custom/i, /schedul/i, /specific/i, /time/i])
+            : pickEnum(schema.shareModes, [/queue/i, /next/i, /add/i]);
+
+      const input: Record<string, unknown> = {
+        channelId,
+        text,
+        mode: shareMode,
+        // Always required by the schema.
+        schedulingType: pickEnum(schema.schedulingTypes, [/^automatic$/i, /automatic/i, /auto/i]),
+      };
+      if (mode === "customScheduled" && dueAt) input.dueAt = new Date(dueAt).toISOString();
+
+      // Media field name and shape vary between Buffer schema versions — detect it.
+      if (schema.mediaField) {
+        const mediaObj: Record<string, unknown> = {};
+        for (const f of schema.mediaObjectFields) {
+          if (/^(url|mediaurl|videourl|source)$/i.test(f)) mediaObj[f] = mediaUrl;
+          else if (/^(type|mediatype)$/i.test(f)) mediaObj[f] = "video";
+          else if (/^(thumbnail|thumbnailurl|previewurl)$/i.test(f)) mediaObj[f] = mediaUrl;
+        }
+        const value = Object.keys(mediaObj).length ? mediaObj : { url: mediaUrl };
+        input[schema.mediaField] = schema.mediaIsList ? [value] : value;
+      }
+
+      const data = await gql<Record<string, any>>(
+        `mutation CreatePost($input: CreatePostInput!) {
+          createPost(input: $input) { ${schema.payloadSelection} }
         }`,
-        {
-          channels: [channelId],
-          text,
-          media: [{ url: mediaUrl, type: "VIDEO" }],
-        },
+        { input },
       );
-      return { postId: data.createPost.id, raw: data };
+      const payload = data?.createPost ?? {};
+      const postId = String(payload.id ?? payload.post?.id ?? payload.postId ?? "");
+      return { postId, raw: data };
     },
     async getPost(id) {
       try {
