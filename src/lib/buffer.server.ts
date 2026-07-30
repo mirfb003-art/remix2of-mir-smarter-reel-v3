@@ -72,9 +72,9 @@ async function introspect(gql: Gql, cacheKey = "default"): Promise<SchemaInfo> {
   const fallback: SchemaInfo = {
     shareModes: ["addToQueue", "shareNow", "customScheduled"],
     schedulingTypes: ["automatic"],
-    mediaField: "media",
+    mediaField: "assets",
     mediaIsList: true,
-    mediaObjectFields: ["url", "type"],
+    mediaObjectFields: ["video", "image"],
     payloadSelection: "__typename",
   };
 
