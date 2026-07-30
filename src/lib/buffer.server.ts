@@ -72,9 +72,9 @@ async function introspect(gql: Gql, cacheKey = "default"): Promise<SchemaInfo> {
   const fallback: SchemaInfo = {
     shareModes: ["addToQueue", "shareNow", "customScheduled"],
     schedulingTypes: ["automatic"],
-    mediaField: "media",
+    mediaField: "assets",
     mediaIsList: true,
-    mediaObjectFields: ["url", "type"],
+    mediaObjectFields: ["video", "image"],
     payloadSelection: "__typename",
   };
 
@@ -208,15 +208,28 @@ export function makeBufferClient(token: string, endpoint: string): BufferClient 
 
       // Media field name and shape vary between Buffer schema versions — detect it.
       if (schema.mediaField) {
-        const mediaObj: Record<string, unknown> = {};
-        for (const f of schema.mediaObjectFields) {
-          if (/^(url|mediaurl|videourl|source)$/i.test(f)) mediaObj[f] = mediaUrl;
-          else if (/^(type|mediatype)$/i.test(f)) mediaObj[f] = "video";
-          else if (/^(thumbnail|thumbnailurl|previewurl)$/i.test(f)) mediaObj[f] = mediaUrl;
+        const isVideo = /\.(mp4|mov|m4v|webm)(\?|$)/i.test(mediaUrl) || /\/video\/upload\//i.test(mediaUrl);
+        const fields = schema.mediaObjectFields;
+        // Buffer's AssetInput is a OneOf union: { video: { url } } | { image: { url } }
+        const oneOfKey = isVideo
+          ? fields.find((f) => /^video$/i.test(f))
+          : fields.find((f) => /^image$/i.test(f)) ?? fields.find((f) => /^photo$/i.test(f));
+
+        let value: Record<string, unknown>;
+        if (oneOfKey) {
+          value = { [oneOfKey]: { url: mediaUrl } };
+        } else {
+          const mediaObj: Record<string, unknown> = {};
+          for (const f of fields) {
+            if (/^(url|mediaurl|videourl|source)$/i.test(f)) mediaObj[f] = mediaUrl;
+            else if (/^(type|mediatype)$/i.test(f)) mediaObj[f] = isVideo ? "video" : "image";
+            else if (/^(thumbnail|thumbnailurl|previewurl)$/i.test(f)) mediaObj[f] = mediaUrl;
+          }
+          value = Object.keys(mediaObj).length ? mediaObj : { url: mediaUrl };
         }
-        const value = Object.keys(mediaObj).length ? mediaObj : { url: mediaUrl };
         input[schema.mediaField] = schema.mediaIsList ? [value] : value;
       }
+
 
       const data = await gql<Record<string, any>>(
         `mutation CreatePost($input: CreatePostInput!) {
