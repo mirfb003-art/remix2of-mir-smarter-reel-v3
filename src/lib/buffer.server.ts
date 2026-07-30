@@ -42,8 +42,100 @@ export function normalizeBufferMetrics(metrics: Array<{ type?: string | null; na
   return out;
 }
 
+interface SchemaInfo {
+  shareModes: string[];
+  schedulingTypes: string[];
+  mediaField: string | null;
+  mediaIsList: boolean;
+  mediaObjectFields: string[];
+  payloadSelection: string;
+}
+
+type Gql = <T>(query: string, variables?: Record<string, unknown>) => Promise<T>;
+
+const schemaCache = new Map<string, SchemaInfo>();
+
+function unwrap(t: any): any {
+  let cur = t;
+  let isList = false;
+  while (cur?.ofType) {
+    if (cur.kind === "LIST") isList = true;
+    cur = cur.ofType;
+  }
+  return { name: cur?.name ?? null, kind: cur?.kind ?? null, isList };
+}
+
+async function introspect(gql: Gql, cacheKey = "default"): Promise<SchemaInfo> {
+  const cached = schemaCache.get(cacheKey);
+  if (cached) return cached;
+
+  const fallback: SchemaInfo = {
+    shareModes: ["addToQueue", "shareNow", "customScheduled"],
+    schedulingTypes: ["automatic"],
+    mediaField: "media",
+    mediaIsList: true,
+    mediaObjectFields: ["url", "type"],
+    payloadSelection: "__typename",
+  };
+
+  try {
+    const data = await gql<any>(`query BufferSchema {
+      input: __type(name: "CreatePostInput") {
+        inputFields { name type { kind name ofType { kind name ofType { kind name ofType { kind name } } } } }
+      }
+      shareMode: __type(name: "ShareMode") { enumValues { name } }
+      scheduling: __type(name: "SchedulingType") { enumValues { name } }
+      payload: __type(name: "PostActionPayload") { fields { name type { kind name ofType { kind name } } } }
+    }`);
+
+    const inputFields: any[] = data?.input?.inputFields ?? [];
+    const mediaCandidates = ["media", "assets", "attachments", "videos", "asset", "attachment", "mediaItems"];
+    const mediaField = inputFields.find((f) => mediaCandidates.includes(f.name));
+    let mediaObjectFields: string[] = ["url", "type"];
+    let mediaIsList = true;
+    if (mediaField) {
+      const info = unwrap(mediaField.type);
+      mediaIsList = info.isList;
+      if (info.name) {
+        try {
+          const sub = await gql<any>(`query M($n: String!) { __type(name: $n) { inputFields { name } } }`, { n: info.name });
+          const names: string[] = (sub?.__type?.inputFields ?? []).map((f: any) => f.name);
+          if (names.length) mediaObjectFields = names;
+        } catch { /* keep defaults */ }
+      }
+    }
+
+    const payloadFields: any[] = data?.payload?.fields ?? [];
+    const names = payloadFields.map((f) => f.name);
+    let payloadSelection = "__typename";
+    if (names.includes("id")) payloadSelection = "id";
+    else if (names.includes("post")) payloadSelection = "post { id }";
+    else if (names.includes("postId")) payloadSelection = "postId";
+    else if (names.length) {
+      const scalar = payloadFields.find((f) => unwrap(f.type).kind === "SCALAR");
+      payloadSelection = scalar ? scalar.name : "__typename";
+    }
+
+    const info: SchemaInfo = {
+      shareModes: (data?.shareMode?.enumValues ?? []).map((v: any) => v.name),
+      schedulingTypes: (data?.scheduling?.enumValues ?? []).map((v: any) => v.name),
+      mediaField: mediaField?.name ?? null,
+      mediaIsList,
+      mediaObjectFields,
+      payloadSelection,
+    };
+    if (!info.shareModes.length) info.shareModes = fallback.shareModes;
+    if (!info.schedulingTypes.length) info.schedulingTypes = fallback.schedulingTypes;
+    schemaCache.set(cacheKey, info);
+    return info;
+  } catch {
+    return fallback;
+  }
+}
+
 export function makeBufferClient(token: string, endpoint: string): BufferClient {
   const url = endpoint || "https://graphql.buffer.com";
+
 
   async function gql<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
     const res = await fetch(url, {
