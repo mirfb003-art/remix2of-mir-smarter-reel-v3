@@ -180,7 +180,7 @@ export function makeBufferClient(token: string, endpoint: string): BufferClient 
       }
     },
     async createPost({ channelId, text, mediaUrl, mode = "addToQueue", dueAt = null }) {
-      const schema = await introspect(gql);
+      const schema = await introspect(gql, url);
 
       // ShareMode is required by CreatePostInput. Map our mode onto the real enum values.
       const pickEnum = (values: string[], patterns: RegExp[], fallback?: string) => {
