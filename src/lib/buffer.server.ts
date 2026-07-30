@@ -7,11 +7,12 @@ export interface BufferPostMetrics {
   metrics: Record<string, number>;
   raw: unknown;
 }
+export type PublishMode = "addToQueue" | "shareNow" | "customScheduled";
 export interface BufferClient {
   gql<T = unknown>(query: string, variables?: Record<string, unknown>): Promise<T>;
   testConnection(): Promise<{ ok: boolean; message: string }>;
   verifySchema(): Promise<{ ok: boolean; hasCreatePost: boolean; mutationName: string | null; inputFields: string[]; message: string }>;
-  createPost(input: { channelId: string; text: string; mediaUrl: string }): Promise<{ postId: string; raw: unknown }>;
+  createPost(input: { channelId: string; text: string; mediaUrl: string; mode?: PublishMode; dueAt?: string | null }): Promise<{ postId: string; raw: unknown }>;
   getPost(id: string): Promise<{ analytics: Record<string, number>; raw: unknown } | null>;
   getChannelPostsMetrics(channelId: string, limit?: number): Promise<BufferPostMetrics[]>;
 }
