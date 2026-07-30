@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { listCampaigns, upsertCampaign, setCampaignStatus, deleteCampaign } from "@/lib/campaigns.functions";
+import { listCampaigns, upsertCampaign, setCampaignStatus, deleteCampaign, updateCampaignPublishing } from "@/lib/campaigns.functions";
+import { PublishModeFields, PUBLISH_MODES, isoToLocalInput, localInputToIso, type PublishMode } from "@/components/publish-mode-fields";
 import { setActiveCampaignId, useActiveCampaignId } from "@/lib/active-campaign";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ function CampaignsPage() {
   const upsert = useServerFn(upsertCampaign);
   const setStatus = useServerFn(setCampaignStatus);
   const del = useServerFn(deleteCampaign);
+  const updatePublishing = useServerFn(updateCampaignPublishing);
   const qc = useQueryClient();
   const activeId = useActiveCampaignId();
 
@@ -45,12 +47,18 @@ function CampaignsPage() {
   const [objective, setObjective] = useState("engagement");
   const [customObj, setCustomObj] = useState("");
   const [shareLearning, setShareLearning] = useState(false);
+  const [publishMode, setPublishMode] = useState<PublishMode>("addToQueue");
+  const [scheduledAt, setScheduledAt] = useState("");
+  const [delayMinutes, setDelayMinutes] = useState<number | null>(null);
 
   const create = useMutation({
     mutationFn: () => upsert({ data: {
       name, description: desc || null, objective,
       custom_objective: objective === "custom" ? customObj : null,
       share_learning: shareLearning,
+      publish_mode: publishMode,
+      custom_scheduled_at: publishMode === "customScheduled" ? localInputToIso(scheduledAt) : null,
+      publish_delay_minutes: publishMode === "customScheduled" ? delayMinutes : null,
     } }),
     onSuccess: (r) => {
       toast.success("Campaign created");
@@ -64,6 +72,12 @@ function CampaignsPage() {
   const statusMut = useMutation({
     mutationFn: (p: { id: string; status: "active" | "paused" | "stopped" }) => setStatus({ data: p }),
     onSuccess: () => { toast.success("Updated"); qc.invalidateQueries(); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+  const publishMut = useMutation({
+    mutationFn: (p: { id: string; publish_mode: PublishMode; custom_scheduled_at?: string | null; publish_delay_minutes?: number | null }) =>
+      updatePublishing({ data: p }),
+    onSuccess: () => { toast.success("Publishing updated"); qc.invalidateQueries({ queryKey: ["campaigns"] }); },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
   const delMut = useMutation({
@@ -105,6 +119,13 @@ function CampaignsPage() {
               <Input value={customObj} onChange={(e) => setCustomObj(e.target.value)} placeholder="Describe the goal" />
             </div>
           )}
+          <div className="md:col-span-2">
+            <PublishModeFields
+              mode={publishMode} onModeChange={setPublishMode}
+              scheduledAt={scheduledAt} onScheduledAtChange={setScheduledAt}
+              delayMinutes={delayMinutes} onDelayMinutesChange={setDelayMinutes}
+            />
+          </div>
           <div className="flex items-center gap-3 md:col-span-2 pt-2">
             <Switch id="sl" checked={shareLearning} onCheckedChange={setShareLearning}/>
             <Label htmlFor="sl" className="text-sm font-normal">Share learning across all campaigns (default: isolated)</Label>
@@ -140,6 +161,34 @@ function CampaignsPage() {
                         Objective: {c.custom_objective || c.objective} · {c.share_learning ? "Shared learning" : "Isolated learning"}
                         {c.description ? ` · ${c.description}` : ""}
                       </div>
+                    </div>
+                    <div className="w-full md:w-auto flex items-center gap-2 order-last md:order-none">
+                      <Select
+                        value={(c as any).publish_mode ?? "addToQueue"}
+                        onValueChange={(v) => publishMut.mutate({
+                          id: c.id, publish_mode: v as PublishMode,
+                          custom_scheduled_at: v === "customScheduled" ? ((c as any).custom_scheduled_at ?? new Date(Date.now() + 5 * 60000).toISOString()) : null,
+                          publish_delay_minutes: v === "customScheduled" ? ((c as any).publish_delay_minutes ?? null) : null,
+                        })}
+                      >
+                        <SelectTrigger className="h-8 w-[190px] text-xs"><SelectValue/></SelectTrigger>
+                        <SelectContent>
+                          {PUBLISH_MODES.map((m) => <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      {(c as any).publish_mode === "customScheduled" && (
+                        <>
+                          <Input
+                            type="datetime-local" className="h-8 w-[190px] text-xs"
+                            value={isoToLocalInput((c as any).custom_scheduled_at)}
+                            onChange={(e) => publishMut.mutate({ id: c.id, publish_mode: "customScheduled", custom_scheduled_at: localInputToIso(e.target.value), publish_delay_minutes: null })}
+                          />
+                          <Button size="sm" variant="outline" className="h-8 text-xs"
+                            onClick={() => publishMut.mutate({ id: c.id, publish_mode: "customScheduled", custom_scheduled_at: null, publish_delay_minutes: 5 })}>
+                            +5 min
+                          </Button>
+                        </>
+                      )}
                     </div>
                     <Badge variant={c.status === "active" ? "default" : c.status === "paused" ? "secondary" : "destructive"} className="capitalize">
                       {c.status}
