@@ -246,8 +246,41 @@ Return JSON: { "caption", "hook", "cta", "hashtags": [...], "style_tags": [...] 
   return out;
 }
 
+type PublishPlan = { mode: "addToQueue" | "shareNow" | "customScheduled"; dueAt: string | null };
+
+// Resolve publishing mode from the schedule (overrides) then the campaign.
+async function resolvePublishPlan(sb: Sb, campaignId: string | null, channelId: string): Promise<PublishPlan> {
+  const pick = (row: any): PublishPlan | null => {
+    if (!row?.publish_mode) return null;
+    let dueAt: string | null = row.custom_scheduled_at ?? null;
+    if (row.publish_delay_minutes) dueAt = new Date(Date.now() + row.publish_delay_minutes * 60_000).toISOString();
+    // A past custom time is meaningless — push it a few minutes out.
+    if (row.publish_mode === "customScheduled" && (!dueAt || new Date(dueAt).getTime() <= Date.now())) {
+      dueAt = new Date(Date.now() + 5 * 60_000).toISOString();
+    }
+    return { mode: row.publish_mode, dueAt };
+  };
+
+  let schedQ = sb.from("schedules")
+    .select("publish_mode,custom_scheduled_at,publish_delay_minutes")
+    .eq("channel_id", channelId).limit(1);
+  if (campaignId) schedQ = schedQ.eq("campaign_id", campaignId);
+  const { data: sched } = await schedQ.maybeSingle();
+  const fromSched = pick(sched);
+  if (fromSched) return fromSched;
+
+  if (campaignId) {
+    const { data: camp } = await sb.from("campaigns")
+      .select("publish_mode,custom_scheduled_at,publish_delay_minutes").eq("id", campaignId).maybeSingle();
+    const fromCamp = pick(camp);
+    if (fromCamp) return fromCamp;
+  }
+  return { mode: "addToQueue", dueAt: null };
+}
+
 async function stepPublish(
   sb: Sb, userId: string, runId: string, channel: any, caption: any, videoUrl: string,
+  plan: PublishPlan = { mode: "addToQueue", dueAt: null },
 ) {
   const cred = channel.buffer_credentials;
   const { makeBufferClient } = await import("./buffer.server");
@@ -259,6 +292,8 @@ async function stepPublish(
       channelId: channel.buffer_channel_id,
       text: caption.caption,
       mediaUrl: videoUrl,
+      mode: plan.mode,
+      dueAt: plan.dueAt,
     }),
     async (attempt, err, durationMs) => {
       await audit(sb, {
@@ -275,7 +310,7 @@ async function stepPublish(
     buffer_post_id: published.postId, platform: channel.platform,
     posted_at: postedAt, raw: published.raw as never,
   });
-  await audit(sb, { userId, runId, eventType: "publish.saved", module: "orchestrator", status: "success", durationMs: Date.now() - t0, payload: { post_id: published.postId } });
+  await audit(sb, { userId, runId, eventType: "publish.saved", module: "orchestrator", status: "success", durationMs: Date.now() - t0, payload: { post_id: published.postId, publish_mode: plan.mode, due_at: plan.dueAt } });
   return { postId: published.postId, postedAt };
 }
 
@@ -487,7 +522,9 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
     if (!state.publish?.done) {
       await sb.from("runs").update({ status: "publishing" }).eq("id", runId);
       await refreshHeartbeat(sb, runId, channelId);
-      const pub = await stepPublish(sb, userId, runId, channel, state.generate_caption!.caption, queueUrl);
+      const plan = await resolvePublishPlan(sb, campaignId, channelId);
+      await audit(sb, { userId, runId, eventType: "publish.mode", module: "orchestrator", status: "info", payload: { publish_mode: plan.mode, due_at: plan.dueAt } });
+      const pub = await stepPublish(sb, userId, runId, channel, state.generate_caption!.caption, queueUrl, plan);
       state.publish = { done: true, postId: pub.postId, postedAt: pub.postedAt };
       await persistStepState(sb, runId, state, "finalize");
     }

@@ -10,6 +10,9 @@ const upsertSchema = z.object({
   interval_hours: z.number().nullable().optional(),
   daily_times: z.array(z.string()).default([]),
   active: z.boolean().default(true),
+  publish_mode: z.enum(["addToQueue", "shareNow", "customScheduled"]).nullable().optional(),
+  custom_scheduled_at: z.string().nullable().optional(),
+  publish_delay_minutes: z.number().int().min(1).max(10080).nullable().optional(),
 });
 
 function computeNextRun(mode: string, interval_hours: number | null | undefined, daily_times: string[]): string | null {
@@ -33,7 +36,7 @@ export const listSchedules = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { data, error } = await context.supabase.from("schedules")
-      .select("id,channel_id,campaign_id,mode,interval_hours,daily_times,next_run_at,last_run_at,active,paused")
+      .select("id,channel_id,campaign_id,mode,interval_hours,daily_times,next_run_at,last_run_at,active,paused,publish_mode,custom_scheduled_at,publish_delay_minutes")
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
     return data ?? [];
@@ -49,6 +52,9 @@ export const upsertSchedule = createServerFn({ method: "POST" })
         channel_id: data.channel_id, campaign_id: data.campaign_id ?? null, mode: data.mode,
         interval_hours: data.interval_hours ?? null,
         daily_times: data.daily_times, active: data.active, next_run_at,
+        publish_mode: data.publish_mode ?? null,
+        custom_scheduled_at: data.custom_scheduled_at ?? null,
+        publish_delay_minutes: data.publish_delay_minutes ?? null,
       }).eq("id", data.id);
       if (error) throw new Error(error.message);
       return { id: data.id };
@@ -57,6 +63,9 @@ export const upsertSchedule = createServerFn({ method: "POST" })
       user_id: context.userId, channel_id: data.channel_id, campaign_id: data.campaign_id ?? null, mode: data.mode,
       interval_hours: data.interval_hours ?? null, daily_times: data.daily_times,
       active: data.active, next_run_at,
+      publish_mode: data.publish_mode ?? null,
+      custom_scheduled_at: data.custom_scheduled_at ?? null,
+      publish_delay_minutes: data.publish_delay_minutes ?? null,
     }).select("id").single();
     if (error) throw new Error(error.message);
     return { id: row.id };

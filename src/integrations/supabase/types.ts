@@ -192,10 +192,13 @@ export type Database = {
         Row: {
           created_at: string
           custom_objective: string | null
+          custom_scheduled_at: string | null
           description: string | null
           id: string
           name: string
           objective: string
+          publish_delay_minutes: number | null
+          publish_mode: string
           share_learning: boolean
           status: string
           updated_at: string
@@ -204,10 +207,13 @@ export type Database = {
         Insert: {
           created_at?: string
           custom_objective?: string | null
+          custom_scheduled_at?: string | null
           description?: string | null
           id?: string
           name: string
           objective?: string
+          publish_delay_minutes?: number | null
+          publish_mode?: string
           share_learning?: boolean
           status?: string
           updated_at?: string
@@ -216,10 +222,13 @@ export type Database = {
         Update: {
           created_at?: string
           custom_objective?: string | null
+          custom_scheduled_at?: string | null
           description?: string | null
           id?: string
           name?: string
           objective?: string
+          publish_delay_minutes?: number | null
+          publish_mode?: string
           share_learning?: boolean
           status?: string
           updated_at?: string
@@ -977,6 +986,7 @@ export type Database = {
           campaign_id: string | null
           channel_id: string
           created_at: string
+          custom_scheduled_at: string | null
           daily_times: string[]
           id: string
           interval_hours: number | null
@@ -984,6 +994,8 @@ export type Database = {
           mode: Database["public"]["Enums"]["schedule_mode"]
           next_run_at: string | null
           paused: boolean
+          publish_delay_minutes: number | null
+          publish_mode: string | null
           updated_at: string
           user_id: string
         }
@@ -992,6 +1004,7 @@ export type Database = {
           campaign_id?: string | null
           channel_id: string
           created_at?: string
+          custom_scheduled_at?: string | null
           daily_times?: string[]
           id?: string
           interval_hours?: number | null
@@ -999,6 +1012,8 @@ export type Database = {
           mode?: Database["public"]["Enums"]["schedule_mode"]
           next_run_at?: string | null
           paused?: boolean
+          publish_delay_minutes?: number | null
+          publish_mode?: string | null
           updated_at?: string
           user_id: string
         }
@@ -1007,6 +1022,7 @@ export type Database = {
           campaign_id?: string | null
           channel_id?: string
           created_at?: string
+          custom_scheduled_at?: string | null
           daily_times?: string[]
           id?: string
           interval_hours?: number | null
@@ -1014,6 +1030,8 @@ export type Database = {
           mode?: Database["public"]["Enums"]["schedule_mode"]
           next_run_at?: string | null
           paused?: boolean
+          publish_delay_minutes?: number | null
+          publish_mode?: string | null
           updated_at?: string
           user_id?: string
         }

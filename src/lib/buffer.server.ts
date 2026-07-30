@@ -7,11 +7,12 @@ export interface BufferPostMetrics {
   metrics: Record<string, number>;
   raw: unknown;
 }
+export type PublishMode = "addToQueue" | "shareNow" | "customScheduled";
 export interface BufferClient {
   gql<T = unknown>(query: string, variables?: Record<string, unknown>): Promise<T>;
   testConnection(): Promise<{ ok: boolean; message: string }>;
   verifySchema(): Promise<{ ok: boolean; hasCreatePost: boolean; mutationName: string | null; inputFields: string[]; message: string }>;
-  createPost(input: { channelId: string; text: string; mediaUrl: string }): Promise<{ postId: string; raw: unknown }>;
+  createPost(input: { channelId: string; text: string; mediaUrl: string; mode?: PublishMode; dueAt?: string | null }): Promise<{ postId: string; raw: unknown }>;
   getPost(id: string): Promise<{ analytics: Record<string, number>; raw: unknown } | null>;
   getChannelPostsMetrics(channelId: string, limit?: number): Promise<BufferPostMetrics[]>;
 }
@@ -41,8 +42,100 @@ export function normalizeBufferMetrics(metrics: Array<{ type?: string | null; na
   return out;
 }
 
+interface SchemaInfo {
+  shareModes: string[];
+  schedulingTypes: string[];
+  mediaField: string | null;
+  mediaIsList: boolean;
+  mediaObjectFields: string[];
+  payloadSelection: string;
+}
+
+type Gql = <T>(query: string, variables?: Record<string, unknown>) => Promise<T>;
+
+const schemaCache = new Map<string, SchemaInfo>();
+
+function unwrap(t: any): any {
+  let cur = t;
+  let isList = false;
+  while (cur?.ofType) {
+    if (cur.kind === "LIST") isList = true;
+    cur = cur.ofType;
+  }
+  return { name: cur?.name ?? null, kind: cur?.kind ?? null, isList };
+}
+
+async function introspect(gql: Gql, cacheKey = "default"): Promise<SchemaInfo> {
+  const cached = schemaCache.get(cacheKey);
+  if (cached) return cached;
+
+  const fallback: SchemaInfo = {
+    shareModes: ["addToQueue", "shareNow", "customScheduled"],
+    schedulingTypes: ["automatic"],
+    mediaField: "media",
+    mediaIsList: true,
+    mediaObjectFields: ["url", "type"],
+    payloadSelection: "__typename",
+  };
+
+  try {
+    const data = await gql<any>(`query BufferSchema {
+      input: __type(name: "CreatePostInput") {
+        inputFields { name type { kind name ofType { kind name ofType { kind name ofType { kind name } } } } }
+      }
+      shareMode: __type(name: "ShareMode") { enumValues { name } }
+      scheduling: __type(name: "SchedulingType") { enumValues { name } }
+      payload: __type(name: "PostActionPayload") { fields { name type { kind name ofType { kind name } } } }
+    }`);
+
+    const inputFields: any[] = data?.input?.inputFields ?? [];
+    const mediaCandidates = ["media", "assets", "attachments", "videos", "asset", "attachment", "mediaItems"];
+    const mediaField = inputFields.find((f) => mediaCandidates.includes(f.name));
+    let mediaObjectFields: string[] = ["url", "type"];
+    let mediaIsList = true;
+    if (mediaField) {
+      const info = unwrap(mediaField.type);
+      mediaIsList = info.isList;
+      if (info.name) {
+        try {
+          const sub = await gql<any>(`query M($n: String!) { __type(name: $n) { inputFields { name } } }`, { n: info.name });
+          const names: string[] = (sub?.__type?.inputFields ?? []).map((f: any) => f.name);
+          if (names.length) mediaObjectFields = names;
+        } catch { /* keep defaults */ }
+      }
+    }
+
+    const payloadFields: any[] = data?.payload?.fields ?? [];
+    const names = payloadFields.map((f) => f.name);
+    let payloadSelection = "__typename";
+    if (names.includes("id")) payloadSelection = "id";
+    else if (names.includes("post")) payloadSelection = "post { id }";
+    else if (names.includes("postId")) payloadSelection = "postId";
+    else if (names.length) {
+      const scalar = payloadFields.find((f) => unwrap(f.type).kind === "SCALAR");
+      payloadSelection = scalar ? scalar.name : "__typename";
+    }
+
+    const info: SchemaInfo = {
+      shareModes: (data?.shareMode?.enumValues ?? []).map((v: any) => v.name),
+      schedulingTypes: (data?.scheduling?.enumValues ?? []).map((v: any) => v.name),
+      mediaField: mediaField?.name ?? null,
+      mediaIsList,
+      mediaObjectFields,
+      payloadSelection,
+    };
+    if (!info.shareModes.length) info.shareModes = fallback.shareModes;
+    if (!info.schedulingTypes.length) info.schedulingTypes = fallback.schedulingTypes;
+    schemaCache.set(cacheKey, info);
+    return info;
+  } catch {
+    return fallback;
+  }
+}
+
 export function makeBufferClient(token: string, endpoint: string): BufferClient {
   const url = endpoint || "https://graphql.buffer.com";
+
 
   async function gql<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
     const res = await fetch(url, {
@@ -86,21 +179,54 @@ export function makeBufferClient(token: string, endpoint: string): BufferClient 
         return { ok: false, hasCreatePost: false, mutationName: null, inputFields: [], message: e instanceof Error ? e.message : String(e) };
       }
     },
-    async createPost({ channelId, text, mediaUrl }) {
-      // Standard Buffer publish mutation. Users on different Buffer versions can adjust their endpoint.
-      const data = await gql<{ createPost: { id: string } }>(
-        `mutation CreatePost($organizationId: String, $channels: [String!]!, $text: String!, $media: [MediaInput!]) {
-          createPost(input: { channels: $channels, text: $text, media: $media, schedulingType: NOW }) {
-            id
-          }
+    async createPost({ channelId, text, mediaUrl, mode = "addToQueue", dueAt = null }) {
+      const schema = await introspect(gql, url);
+
+      // ShareMode is required by CreatePostInput. Map our mode onto the real enum values.
+      const pickEnum = (values: string[], patterns: RegExp[], fallback?: string) => {
+        for (const p of patterns) {
+          const hit = values.find((v) => p.test(v));
+          if (hit) return hit;
+        }
+        return fallback ?? values[0];
+      };
+      const shareMode =
+        mode === "shareNow"
+          ? pickEnum(schema.shareModes, [/now/i, /share/i])
+          : mode === "customScheduled"
+            ? pickEnum(schema.shareModes, [/custom/i, /schedul/i, /specific/i, /time/i])
+            : pickEnum(schema.shareModes, [/queue/i, /next/i, /add/i]);
+
+      const input: Record<string, unknown> = {
+        channelId,
+        text,
+        mode: shareMode,
+        // Always required by the schema.
+        schedulingType: pickEnum(schema.schedulingTypes, [/^automatic$/i, /automatic/i, /auto/i]),
+      };
+      if (mode === "customScheduled" && dueAt) input.dueAt = new Date(dueAt).toISOString();
+
+      // Media field name and shape vary between Buffer schema versions — detect it.
+      if (schema.mediaField) {
+        const mediaObj: Record<string, unknown> = {};
+        for (const f of schema.mediaObjectFields) {
+          if (/^(url|mediaurl|videourl|source)$/i.test(f)) mediaObj[f] = mediaUrl;
+          else if (/^(type|mediatype)$/i.test(f)) mediaObj[f] = "video";
+          else if (/^(thumbnail|thumbnailurl|previewurl)$/i.test(f)) mediaObj[f] = mediaUrl;
+        }
+        const value = Object.keys(mediaObj).length ? mediaObj : { url: mediaUrl };
+        input[schema.mediaField] = schema.mediaIsList ? [value] : value;
+      }
+
+      const data = await gql<Record<string, any>>(
+        `mutation CreatePost($input: CreatePostInput!) {
+          createPost(input: $input) { ${schema.payloadSelection} }
         }`,
-        {
-          channels: [channelId],
-          text,
-          media: [{ url: mediaUrl, type: "VIDEO" }],
-        },
+        { input },
       );
-      return { postId: data.createPost.id, raw: data };
+      const payload = data?.createPost ?? {};
+      const postId = String(payload.id ?? payload.post?.id ?? payload.postId ?? "");
+      return { postId, raw: data };
     },
     async getPost(id) {
       try {

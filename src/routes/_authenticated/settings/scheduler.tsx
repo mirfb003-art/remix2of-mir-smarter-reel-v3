@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { useState } from "react";
 import { Trash2, Play, Pause } from "lucide-react";
+import { PublishModeFields, localInputToIso, type PublishMode } from "@/components/publish-mode-fields";
 
 
 export const Route = createFileRoute("/_authenticated/settings/scheduler")({ component: SchedulerSettings });
@@ -33,6 +34,9 @@ function SchedulerSettings() {
   const [mode, setMode] = useState<"interval"|"daily_times"|"manual">("interval");
   const [interval, setInterval] = useState<number>(6);
   const [times, setTimes] = useState<string>("09:00, 15:00, 21:00");
+  const [publishMode, setPublishMode] = useState<PublishMode>("addToQueue");
+  const [scheduledAt, setScheduledAt] = useState("");
+  const [delayMinutes, setDelayMinutes] = useState<number | null>(null);
 
   const mut = useMutation({
     mutationFn: () => upsert({ data: {
@@ -40,6 +44,9 @@ function SchedulerSettings() {
       interval_hours: mode === "interval" ? interval : null,
       daily_times: mode === "daily_times" ? times.split(",").map(s => s.trim()).filter(Boolean) : [],
       active: true,
+      publish_mode: publishMode,
+      custom_scheduled_at: publishMode === "customScheduled" ? localInputToIso(scheduledAt) : null,
+      publish_delay_minutes: publishMode === "customScheduled" ? delayMinutes : null,
     } }),
     onSuccess: () => { toast.success("Schedule saved"); qc.invalidateQueries({ queryKey: ["schedules"] }); },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
@@ -83,6 +90,13 @@ function SchedulerSettings() {
           {mode === "daily_times" && (
             <div className="space-y-1 md:col-span-4"><Label>Times (UTC, comma-separated HH:MM)</Label><Input value={times} onChange={e => setTimes(e.target.value)}/></div>
           )}
+          <div className="md:col-span-4">
+            <PublishModeFields
+              mode={publishMode} onModeChange={setPublishMode}
+              scheduledAt={scheduledAt} onScheduledAtChange={setScheduledAt}
+              delayMinutes={delayMinutes} onDelayMinutesChange={setDelayMinutes}
+            />
+          </div>
           <div className="md:col-span-4"><Button onClick={() => mut.mutate()} disabled={!channelId}>Add schedule</Button></div>
         </CardContent>
       </Card>
@@ -101,6 +115,7 @@ function SchedulerSettings() {
                       <div className="text-xs text-muted-foreground">
                         {s.mode === "interval" ? `Every ${s.interval_hours}h` : s.mode === "daily_times" ? `At ${(s.daily_times ?? []).join(", ")} UTC` : "Manual"}
                         {s.next_run_at ? ` · next ${new Date(s.next_run_at).toLocaleString()}` : ""}
+                        {s.publish_mode ? ` · ${s.publish_mode === "shareNow" ? "publish immediately" : s.publish_mode === "customScheduled" ? (s.publish_delay_minutes ? `in ${s.publish_delay_minutes} min` : `at ${s.custom_scheduled_at ? new Date(s.custom_scheduled_at).toLocaleString() : "custom time"}`) : "Buffer queue"}` : ""}
                       </div>
                     </div>
                     <Badge variant={s.paused ? "secondary" : s.active ? "default" : "outline"}>
