@@ -14,8 +14,9 @@ export const listRuns = createServerFn({ method: "POST" })
         video_queue!runs_queue_item_id_fkey(cloudinary_url),
         video_analyses(summary, topic),
         captions(text, hashtags),
-        published_posts(buffer_post_id, permalink, posted_at,
+        published_posts(buffer_post_id, permalink, posted_at, buffer_status, due_at, verified_at, source,
           post_analytics(views,likes,comments,shares,saves,reach,impressions,fetched_at)),
+
         learning_reports(worked, hook_verdict, change_recommendation)
       `)
       .order("started_at", { ascending: false })
