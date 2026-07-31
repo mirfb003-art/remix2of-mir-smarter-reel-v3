@@ -1,7 +1,10 @@
-// Analytics fetcher — called by pg_cron (default hourly).
-// For each channel that has published posts awaiting analytics, batch-fetch
-// recent post metrics from Buffer via a single GraphQL query, then match
-// them back to our published_posts by buffer_post_id and upsert analytics.
+// Buffer analytics sync — called by pg_cron (hourly).
+// For every active channel:
+//   1. Pull recent sent posts from Buffer (batch GraphQL call).
+//   2. Match to published_posts by buffer_post_id; import posts we don't know
+//      about yet (historical / manually posted) so analysis can learn from them.
+//   3. Upsert post_analytics, refresh publish proof, evaluate predictions.
+//   4. Recompute durable trend insights for each touched user.
 import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/api/public/cron/fetch-analytics")({
@@ -9,116 +12,113 @@ export const Route = createFileRoute("/api/public/cron/fetch-analytics")({
     handlers: {
       POST: async ({ request }) => {
         const apikey = request.headers.get("apikey");
-        if (!apikey || apikey !== process.env.SUPABASE_PUBLISHABLE_KEY) {
+        if (!apikey || apikey !== process.env['SUPABASE_PUBLISHABLE_KEY']) {
           return new Response("Unauthorized", { status: 401 });
         }
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { makeBufferClient } = await import("@/lib/buffer.server");
 
-        // Candidate published posts (have a buffer id and a channel).
-        const { data: posts, error } = await supabaseAdmin
-          .from("published_posts")
-          .select("id,user_id,run_id,buffer_post_id,posted_at,channel_id,channels(buffer_channel_id,buffer_credentials(api_token,graphql_endpoint))")
-          .not("buffer_post_id", "is", null)
-          .not("channel_id", "is", null)
-          .order("posted_at", { ascending: true })
-          .limit(200);
-        if (error) return Response.json({ error: error.message }, { status: 500 });
+        const { data: channels, error: chErr } = await supabaseAdmin
+          .from("channels")
+          .select("id,user_id,platform,buffer_channel_id,active,buffer_credentials(api_token,graphql_endpoint)")
+          .eq("active", true);
+        if (chErr) return Response.json({ error: chErr.message }, { status: 500 });
 
-        const rows = posts ?? [];
-
-        // Per-user analytics delay.
-        const userIds = Array.from(new Set(rows.map((p) => p.user_id)));
-        const { data: settings } = userIds.length
-          ? await supabaseAdmin.from("settings").select("user_id,analytics_delay_h").in("user_id", userIds)
-          : { data: [] as { user_id: string; analytics_delay_h: number }[] };
-        const delayByUser = new Map((settings ?? []).map((s) => [s.user_id, s.analytics_delay_h ?? 24]));
-
-        const now = Date.now();
-
-        // Only process posts past the user's delay window.
-        const eligible = rows.filter((p) => {
-          const delayH = delayByUser.get(p.user_id) ?? 24;
-          const readyAt = new Date(p.posted_at ?? 0).getTime() + delayH * 3600_000;
-          return readyAt <= now;
-        });
-
-        // Group by channel to make one Buffer call per channel.
-        const byChannel = new Map<string, typeof eligible>();
-        for (const p of eligible) {
-          const arr = byChannel.get(p.channel_id as string) ?? [];
-          arr.push(p);
-          byChannel.set(p.channel_id as string, arr);
-        }
-
-        const results: Array<{ post_id: string; ok: boolean; error?: string }> = [];
         const usersTouched = new Set<string>();
+        const summary: Array<{ channel_id: string; fetched: number; imported: number; updated: number; error?: string }> = [];
 
-        for (const [channelId, channelPosts] of byChannel) {
-          const cred = (channelPosts[0] as any).channels?.buffer_credentials;
-          const bufferChannelId = (channelPosts[0] as any).channels?.buffer_channel_id;
-          if (!cred?.api_token || !bufferChannelId) {
-            for (const p of channelPosts) results.push({ post_id: p.id, ok: false, error: "no credentials or channel id" });
+        for (const ch of channels ?? []) {
+          const cred = (ch as any).buffer_credentials;
+          if (!cred?.api_token || !ch.buffer_channel_id) {
+            summary.push({ channel_id: ch.id, fetched: 0, imported: 0, updated: 0, error: "missing credentials" });
             continue;
           }
 
           let nodes: Awaited<ReturnType<ReturnType<typeof makeBufferClient>["getChannelPostsMetrics"]>> = [];
           try {
-            const buffer = makeBufferClient(cred.api_token, cred.graphql_endpoint || "https://api.buffer.com");
-            nodes = await buffer.getChannelPostsMetrics(bufferChannelId, 50);
+            const buffer = makeBufferClient(cred.api_token, cred.graphql_endpoint || "https://graphql.buffer.com");
+            nodes = await buffer.getChannelPostsMetrics(ch.buffer_channel_id, 50);
           } catch (e) {
-            for (const p of channelPosts) results.push({ post_id: p.id, ok: false, error: e instanceof Error ? e.message : String(e) });
+            summary.push({ channel_id: ch.id, fetched: 0, imported: 0, updated: 0, error: e instanceof Error ? e.message : String(e) });
             continue;
           }
-          const byBufferId = new Map(nodes.map((n) => [n.id, n]));
+          if (!nodes.length) { summary.push({ channel_id: ch.id, fetched: 0, imported: 0, updated: 0 }); continue; }
 
-          for (const p of channelPosts) {
-            const node = byBufferId.get(p.buffer_post_id as string);
-            if (!node) { results.push({ post_id: p.id, ok: false, error: "not found in Buffer response" }); continue; }
-            const a = node.metrics;
+          const { data: known } = await supabaseAdmin
+            .from("published_posts")
+            .select("id,run_id,buffer_post_id")
+            .eq("user_id", ch.user_id)
+            .in("buffer_post_id", nodes.map((n) => n.id));
+          const knownById = new Map((known ?? []).map((k) => [k.buffer_post_id as string, k]));
+
+          let imported = 0, updated = 0;
+
+          for (const n of nodes) {
+            let row = knownById.get(n.id) as { id: string; run_id: string | null } | undefined;
+
+            if (!row) {
+              const { data: ins } = await supabaseAdmin.from("published_posts").insert({
+                user_id: ch.user_id, channel_id: ch.id, run_id: null,
+                buffer_post_id: n.id, platform: ch.platform,
+                posted_at: n.sentAt, text_content: n.text,
+                permalink: (n.raw as any)?.externalLink ?? null,
+                buffer_status: (n.raw as any)?.status ?? "sent",
+                verified_at: new Date().toISOString(),
+                source: "buffer_import", raw: n.raw as never,
+              } as never).select("id,run_id").single();
+              if (!ins) continue;
+              row = ins as any;
+              imported++;
+            } else {
+              await supabaseAdmin.from("published_posts").update({
+                buffer_status: (n.raw as any)?.status ?? null,
+                permalink: (n.raw as any)?.externalLink ?? null,
+                posted_at: n.sentAt ?? undefined,
+                verified_at: new Date().toISOString(),
+                metrics_updated_at: n.metricsUpdatedAt ?? new Date().toISOString(),
+              } as never).eq("id", row.id);
+            }
+
+            const m = n.metrics;
             const metrics = {
-              views: a.views != null ? Math.round(a.views) : null,
-              likes: a.likes != null ? Math.round(a.likes) : null,
-              comments: a.comments != null ? Math.round(a.comments) : null,
-              shares: a.shares != null ? Math.round(a.shares) : null,
-              saves: a.saves != null ? Math.round(a.saves) : null,
-              reach: a.reach != null ? Math.round(a.reach) : null,
-              impressions: a.impressions != null ? Math.round(a.impressions) : null,
+              views: m.views ?? null, likes: m.likes ?? null, comments: m.comments ?? null,
+              shares: m.shares ?? null, saves: m.saves ?? null, reach: m.reach ?? null,
+              impressions: m.impressions ?? null,
             };
-            try {
-              // Upsert post_analytics (one row per published post — replace latest).
+            const hasMetrics = Object.values(metrics).some((v) => v != null);
+            if (hasMetrics) {
               const { data: existing } = await supabaseAdmin
-                .from("post_analytics").select("id").eq("published_post_id", p.id).maybeSingle();
+                .from("post_analytics").select("id").eq("published_post_id", row!.id).maybeSingle();
               if (existing) {
                 await supabaseAdmin.from("post_analytics").update({
-                  ...metrics, fetched_at: new Date().toISOString(), raw: node.raw as never,
+                  ...metrics, fetched_at: new Date().toISOString(), raw: n.raw as never,
                 }).eq("id", existing.id);
               } else {
                 await supabaseAdmin.from("post_analytics").insert({
-                  published_post_id: p.id, user_id: p.user_id, ...metrics, raw: node.raw as never,
+                  published_post_id: row!.id, user_id: ch.user_id, ...metrics, raw: n.raw as never,
                 });
               }
-              await supabaseAdmin.from("published_posts").update({
-                metrics_updated_at: node.metricsUpdatedAt ?? new Date().toISOString(),
-              }).eq("id", p.id);
+              updated++;
+              usersTouched.add(ch.user_id);
+            }
 
-              // Evaluate prediction accuracy if this run had a prediction.
+            // Evaluate prediction accuracy for app runs.
+            if (row!.run_id) {
               const { data: run } = await supabaseAdmin
-                .from("runs").select("prediction_id").eq("id", (p as any).run_id ?? "").maybeSingle();
-              if (run?.prediction_id) {
-                const { evaluatePrediction } = await import("@/lib/prediction-engine.server");
-                await evaluatePrediction(supabaseAdmin, run.prediction_id, metrics);
+                .from("runs").select("prediction_id").eq("id", row!.run_id).maybeSingle();
+              if (run?.prediction_id && hasMetrics) {
+                try {
+                  const { evaluatePrediction } = await import("@/lib/prediction-engine.server");
+                  await evaluatePrediction(supabaseAdmin, run.prediction_id, metrics);
+                } catch { /* prediction scoring must not break ingestion */ }
               }
-              usersTouched.add(p.user_id);
-              results.push({ post_id: p.id, ok: true });
-            } catch (e) {
-              results.push({ post_id: p.id, ok: false, error: e instanceof Error ? e.message : String(e) });
             }
           }
+
+          summary.push({ channel_id: ch.id, fetched: nodes.length, imported, updated });
         }
 
-        // Recompute durable trend insights for each user that got fresh analytics.
         if (usersTouched.size) {
           const { recomputeTrends } = await import("@/lib/trend-analyzer.server");
           for (const uid of usersTouched) {
@@ -126,13 +126,7 @@ export const Route = createFileRoute("/api/public/cron/fetch-analytics")({
           }
         }
 
-        return Response.json({
-          scanned: rows.length,
-          eligible: eligible.length,
-          channels: byChannel.size,
-          processed: results.length,
-          results,
-        });
+        return Response.json({ channels: (channels ?? []).length, summary });
       },
     },
   },

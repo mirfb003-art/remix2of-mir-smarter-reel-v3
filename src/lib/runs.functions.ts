@@ -14,8 +14,9 @@ export const listRuns = createServerFn({ method: "POST" })
         video_queue!runs_queue_item_id_fkey(cloudinary_url),
         video_analyses(summary, topic),
         captions(text, hashtags),
-        published_posts(buffer_post_id, permalink, posted_at,
+        published_posts(buffer_post_id, permalink, posted_at, buffer_status, due_at, verified_at, source,
           post_analytics(views,likes,comments,shares,saves,reach,impressions,fetched_at)),
+
         learning_reports(worked, hook_verdict, change_recommendation)
       `)
       .order("started_at", { ascending: false })
@@ -77,4 +78,18 @@ export const dashboardStats = createServerFn({ method: "POST" })
       schedules: (schedules as any).data ?? [],
       performance: [],
     };
+  });
+
+// Posts that exist in Buffer but were not created by an app run (historical / manual posts).
+export const listImportedPosts = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await context.supabase
+      .from("published_posts")
+      .select("id,buffer_post_id,permalink,posted_at,buffer_status,due_at,verified_at,platform,text_content,source,post_analytics(views,likes,comments,shares,saves,reach,impressions,fetched_at)")
+      .eq("source", "buffer_import")
+      .order("posted_at", { ascending: false })
+      .limit(300);
+    if (error) throw new Error(error.message);
+    return data ?? [];
   });
