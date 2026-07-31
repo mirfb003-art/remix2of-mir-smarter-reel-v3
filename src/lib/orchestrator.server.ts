@@ -294,6 +294,7 @@ async function stepPublish(
       mediaUrl: videoUrl,
       mode: plan.mode,
       dueAt: plan.dueAt,
+      platform: channel.platform,
     }),
     async (attempt, err, durationMs) => {
       await audit(sb, {
@@ -304,15 +305,29 @@ async function stepPublish(
     },
   );
 
-  const postedAt = new Date().toISOString();
+  if (!published?.postId) throw new Error("Buffer did not confirm the post — no post id returned");
+
+  const postedAt = published.sentAt ?? new Date().toISOString();
   await sb.from("published_posts").insert({
     run_id: runId, user_id: userId, channel_id: channel.id,
     buffer_post_id: published.postId, platform: channel.platform,
     posted_at: postedAt, raw: published.raw as never,
+    source: "app", text_content: caption.caption,
+    buffer_status: published.status, due_at: published.dueAt,
+    permalink: published.permalink,
+    verified_at: published.verified ? new Date().toISOString() : null,
+  } as never);
+  await audit(sb, {
+    userId, runId, eventType: "publish.saved", module: "orchestrator", status: "success",
+    durationMs: Date.now() - t0,
+    payload: {
+      post_id: published.postId, publish_mode: plan.mode, due_at: published.dueAt,
+      buffer_status: published.status, verified: published.verified, permalink: published.permalink,
+    },
   });
-  await audit(sb, { userId, runId, eventType: "publish.saved", module: "orchestrator", status: "success", durationMs: Date.now() - t0, payload: { post_id: published.postId, publish_mode: plan.mode, due_at: plan.dueAt } });
-  return { postId: published.postId, postedAt };
+  return { postId: published.postId, postedAt, status: published.status, verified: published.verified };
 }
+
 
 // -------- Main entry --------
 
