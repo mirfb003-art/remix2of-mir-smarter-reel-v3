@@ -1,4 +1,4 @@
-// Buffer GraphQL client (server-only). Uses user's API token & endpoint.
+// Buffer GraphQL client (server-only). Uses the user's API token & endpoint.
 export interface BufferPostMetrics {
   id: string;
   text: string | null;
@@ -8,12 +8,30 @@ export interface BufferPostMetrics {
   raw: unknown;
 }
 export type PublishMode = "addToQueue" | "shareNow" | "customScheduled";
+
+export interface BufferPostProof {
+  postId: string;
+  status: string | null;
+  dueAt: string | null;
+  sentAt: string | null;
+  permalink: string | null;
+  channelId: string | null;
+  shareMode: string | null;
+  verified: boolean;
+  raw: unknown;
+}
+
 export interface BufferClient {
   gql<T = unknown>(query: string, variables?: Record<string, unknown>): Promise<T>;
   testConnection(): Promise<{ ok: boolean; message: string }>;
   verifySchema(): Promise<{ ok: boolean; hasCreatePost: boolean; mutationName: string | null; inputFields: string[]; message: string }>;
-  createPost(input: { channelId: string; text: string; mediaUrl: string; mode?: PublishMode; dueAt?: string | null }): Promise<{ postId: string; raw: unknown }>;
-  getPost(id: string): Promise<{ analytics: Record<string, number>; raw: unknown } | null>;
+  getOrganizationId(): Promise<string | null>;
+  createPost(input: {
+    channelId: string; text: string; mediaUrl: string;
+    mode?: PublishMode; dueAt?: string | null; platform?: string | null;
+  }): Promise<BufferPostProof>;
+  getPost(id: string): Promise<{ analytics: Record<string, number>; raw: any } | null>;
+  getPostProof(id: string): Promise<BufferPostProof | null>;
   getChannelPostsMetrics(channelId: string, limit?: number): Promise<BufferPostMetrics[]>;
 }
 
@@ -37,113 +55,32 @@ export function normalizeBufferMetrics(metrics: Array<{ type?: string | null; na
     if (!Number.isFinite(val)) continue;
     out[key] = (out[key] ?? 0) + val;
   }
-  // Fallback: use impressions as views if views missing.
   if (out.views == null && out.impressions != null) out.views = out.impressions;
   return out;
 }
 
-interface SchemaInfo {
-  shareModes: string[];
-  schedulingTypes: string[];
-  mediaField: string | null;
-  mediaIsList: boolean;
-  mediaObjectFields: string[];
-  payloadSelection: string;
+const POST_FIELDS = `id status dueAt sentAt text channelId shareMode externalLink createdAt metricsUpdatedAt`;
+
+function isVideoUrl(url: string) {
+  return /\.(mp4|mov|m4v|webm)(\?|$)/i.test(url) || /\/video\/upload\//i.test(url);
 }
 
-type Gql = <T>(query: string, variables?: Record<string, unknown>) => Promise<T>;
-
-const schemaCache = new Map<string, SchemaInfo>();
-
-function unwrap(t: any): any {
-  let cur = t;
-  let isList = false;
-  while (cur?.ofType) {
-    if (cur.kind === "LIST") isList = true;
-    cur = cur.ofType;
-  }
-  return { name: cur?.name ?? null, kind: cur?.kind ?? null, isList };
-}
-
-async function introspect(gql: Gql, cacheKey = "default"): Promise<SchemaInfo> {
-  const cached = schemaCache.get(cacheKey);
-  if (cached) return cached;
-
-  const fallback: SchemaInfo = {
-    shareModes: ["addToQueue", "shareNow", "customScheduled"],
-    schedulingTypes: ["automatic"],
-    mediaField: "assets",
-    mediaIsList: true,
-    mediaObjectFields: ["video", "image"],
-    payloadSelection: "__typename",
-  };
-
-  try {
-    const data = await gql<any>(`query BufferSchema {
-      input: __type(name: "CreatePostInput") {
-        inputFields { name type { kind name ofType { kind name ofType { kind name ofType { kind name } } } } }
-      }
-      shareMode: __type(name: "ShareMode") { enumValues { name } }
-      scheduling: __type(name: "SchedulingType") { enumValues { name } }
-      payload: __type(name: "PostActionPayload") { fields { name type { kind name ofType { kind name } } } }
-    }`);
-
-    const inputFields: any[] = data?.input?.inputFields ?? [];
-    const mediaCandidates = ["media", "assets", "attachments", "videos", "asset", "attachment", "mediaItems"];
-    const mediaField = inputFields.find((f) => mediaCandidates.includes(f.name));
-    let mediaObjectFields: string[] = ["url", "type"];
-    let mediaIsList = true;
-    if (mediaField) {
-      const info = unwrap(mediaField.type);
-      mediaIsList = info.isList;
-      if (info.name) {
-        try {
-          const sub = await gql<any>(`query M($n: String!) { __type(name: $n) { inputFields { name } } }`, { n: info.name });
-          const names: string[] = (sub?.__type?.inputFields ?? []).map((f: any) => f.name);
-          if (names.length) mediaObjectFields = names;
-        } catch { /* keep defaults */ }
-      }
-    }
-
-    const payloadFields: any[] = data?.payload?.fields ?? [];
-    const names = payloadFields.map((f) => f.name);
-    let payloadSelection = "__typename";
-    if (names.includes("id")) payloadSelection = "id";
-    else if (names.includes("post")) payloadSelection = "post { id }";
-    else if (names.includes("postId")) payloadSelection = "postId";
-    else if (names.length) {
-      const scalar = payloadFields.find((f) => unwrap(f.type).kind === "SCALAR");
-      payloadSelection = scalar ? scalar.name : "__typename";
-    }
-
-    const info: SchemaInfo = {
-      shareModes: (data?.shareMode?.enumValues ?? []).map((v: any) => v.name),
-      schedulingTypes: (data?.scheduling?.enumValues ?? []).map((v: any) => v.name),
-      mediaField: mediaField?.name ?? null,
-      mediaIsList,
-      mediaObjectFields,
-      payloadSelection,
-    };
-    if (!info.shareModes.length) info.shareModes = fallback.shareModes;
-    if (!info.schedulingTypes.length) info.schedulingTypes = fallback.schedulingTypes;
-    schemaCache.set(cacheKey, info);
-    return info;
-  } catch {
-    return fallback;
-  }
+// Networks that require an explicit post type in metadata.
+function platformMetadata(platform: string | null | undefined, video: boolean): Record<string, unknown> | null {
+  const p = String(platform ?? "").toLowerCase();
+  if (p.includes("instagram")) return { instagram: { type: video ? "reel" : "post", shouldShareToFeed: true } };
+  if (p.includes("facebook")) return { facebook: { type: video ? "reel" : "post" } };
+  return null;
 }
 
 export function makeBufferClient(token: string, endpoint: string): BufferClient {
   const url = endpoint || "https://graphql.buffer.com";
-
+  let orgIdCache: string | null = null;
 
   async function gql<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
     const res = await fetch(url, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ query, variables }),
     });
     const body = await res.text();
@@ -153,137 +90,150 @@ export function makeBufferClient(token: string, endpoint: string): BufferClient 
     return parsed.data as T;
   }
 
+  async function getOrganizationId(): Promise<string | null> {
+    if (orgIdCache) return orgIdCache;
+    try {
+      const d = await gql<{ account: { organizations: Array<{ id: string }> } }>(
+        `query { account { id organizations { id name } } }`,
+      );
+      orgIdCache = d.account?.organizations?.[0]?.id ?? null;
+      return orgIdCache;
+    } catch {
+      return null;
+    }
+  }
+
+  async function getPostProof(id: string): Promise<BufferPostProof | null> {
+    try {
+      const d = await gql<{ post: any }>(`query P($id: PostId!) { post(input: { id: $id }) { ${POST_FIELDS} } }`, { id });
+      const p = d?.post;
+      if (!p?.id) return null;
+      return {
+        postId: p.id, status: p.status ?? null, dueAt: p.dueAt ?? null, sentAt: p.sentAt ?? null,
+        permalink: p.externalLink ?? null, channelId: p.channelId ?? null, shareMode: p.shareMode ?? null,
+        verified: true, raw: p,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   return {
     gql,
+    getOrganizationId,
     async testConnection() {
       try {
-        await gql<{ viewer: { id: string } }>(`query { viewer { id } }`);
-        return { ok: true, message: "Connected" };
+        const d = await gql<{ account: { id: string; email: string | null } }>(`query { account { id email } }`);
+        return { ok: true, message: `Connected as ${d.account?.email ?? d.account?.id ?? "Buffer account"}` };
       } catch (e) {
         return { ok: false, message: e instanceof Error ? e.message : String(e) };
       }
     },
     async verifySchema() {
       try {
-        const data = await gql<{ __schema: { mutationType: { fields: Array<{ name: string; args: Array<{ name: string; type: { name: string | null; ofType?: { name: string | null } } }> }> } } }>(
-          `query { __schema { mutationType { fields { name args { name type { name ofType { name } } } } } } }`,
+        const data = await gql<{ __schema: { mutationType: { fields: Array<{ name: string; args: Array<{ name: string }> }> } } }>(
+          `query { __schema { mutationType { fields { name args { name } } } } }`,
         );
         const fields = data.__schema?.mutationType?.fields ?? [];
-        const candidates = ["createPost", "createUpdate", "publishPost", "schedulePost"];
-        const found = fields.find((f) => candidates.includes(f.name));
+        const found = fields.find((f) => f.name === "createPost");
         if (!found) {
-          return { ok: false, hasCreatePost: false, mutationName: null, inputFields: [], message: `No publish mutation found. Available: ${fields.map((f) => f.name).slice(0, 15).join(", ")}` };
+          return { ok: false, hasCreatePost: false, mutationName: null, inputFields: [], message: `No createPost mutation found. Available: ${fields.map((f) => f.name).slice(0, 15).join(", ")}` };
         }
-        return { ok: true, hasCreatePost: true, mutationName: found.name, inputFields: found.args.map((a) => a.name), message: `Found mutation "${found.name}"` };
+        return { ok: true, hasCreatePost: true, mutationName: "createPost", inputFields: found.args.map((a) => a.name), message: `Found mutation "createPost"` };
       } catch (e) {
         return { ok: false, hasCreatePost: false, mutationName: null, inputFields: [], message: e instanceof Error ? e.message : String(e) };
       }
     },
-    async createPost({ channelId, text, mediaUrl, mode = "addToQueue", dueAt = null }) {
-      const schema = await introspect(gql, url);
 
-      // ShareMode is required by CreatePostInput. Map our mode onto the real enum values.
-      const pickEnum = (values: string[], patterns: RegExp[], fallback?: string) => {
-        for (const p of patterns) {
-          const hit = values.find((v) => p.test(v));
-          if (hit) return hit;
-        }
-        return fallback ?? values[0];
-      };
-      const shareMode =
-        mode === "shareNow"
-          ? pickEnum(schema.shareModes, [/now/i, /share/i])
-          : mode === "customScheduled"
-            ? pickEnum(schema.shareModes, [/custom/i, /schedul/i, /specific/i, /time/i])
-            : pickEnum(schema.shareModes, [/queue/i, /next/i, /add/i]);
-
+    async createPost({ channelId, text, mediaUrl, mode = "addToQueue", dueAt = null, platform = null }) {
+      const video = isVideoUrl(mediaUrl);
       const input: Record<string, unknown> = {
         channelId,
         text,
-        mode: shareMode,
-        // Always required by the schema.
-        schedulingType: pickEnum(schema.schedulingTypes, [/^automatic$/i, /automatic/i, /auto/i]),
+        mode,
+        schedulingType: "automatic",
+        needsApproval: false,
+        // AssetInput is a OneOf union — video/image must be nested.
+        assets: [video ? { video: { url: mediaUrl } } : { image: { url: mediaUrl } }],
       };
-      if (mode === "customScheduled" && dueAt) input.dueAt = new Date(dueAt).toISOString();
-
-      // Media field name and shape vary between Buffer schema versions — detect it.
-      if (schema.mediaField) {
-        const isVideo = /\.(mp4|mov|m4v|webm)(\?|$)/i.test(mediaUrl) || /\/video\/upload\//i.test(mediaUrl);
-        const fields = schema.mediaObjectFields;
-        // Buffer's AssetInput is a OneOf union: { video: { url } } | { image: { url } }
-        const oneOfKey = isVideo
-          ? fields.find((f) => /^video$/i.test(f))
-          : fields.find((f) => /^image$/i.test(f)) ?? fields.find((f) => /^photo$/i.test(f));
-
-        let value: Record<string, unknown>;
-        if (oneOfKey) {
-          value = { [oneOfKey]: { url: mediaUrl } };
-        } else {
-          const mediaObj: Record<string, unknown> = {};
-          for (const f of fields) {
-            if (/^(url|mediaurl|videourl|source)$/i.test(f)) mediaObj[f] = mediaUrl;
-            else if (/^(type|mediatype)$/i.test(f)) mediaObj[f] = isVideo ? "video" : "image";
-            else if (/^(thumbnail|thumbnailurl|previewurl)$/i.test(f)) mediaObj[f] = mediaUrl;
-          }
-          value = Object.keys(mediaObj).length ? mediaObj : { url: mediaUrl };
-        }
-        input[schema.mediaField] = schema.mediaIsList ? [value] : value;
+      const meta = platformMetadata(platform, video);
+      if (meta) input.metadata = meta;
+      if (mode === "customScheduled") {
+        if (!dueAt) throw new Error("customScheduled publishing requires a due date");
+        input.dueAt = new Date(dueAt).toISOString();
       }
 
-
-      const data = await gql<Record<string, any>>(
+      const data = await gql<{ createPost: any }>(
         `mutation CreatePost($input: CreatePostInput!) {
-          createPost(input: $input) { ${schema.payloadSelection} }
+          createPost(input: $input) {
+            __typename
+            ... on PostActionSuccess { post { ${POST_FIELDS} } }
+            ... on InvalidInputError { message }
+            ... on UnexpectedError { message }
+            ... on UnauthorizedError { message }
+            ... on NotFoundError { message }
+            ... on LimitReachedError { message }
+            ... on RestProxyError { message code }
+          }
         }`,
         { input },
       );
-      const payload = data?.createPost ?? {};
-      const postId = String(payload.id ?? payload.post?.id ?? payload.postId ?? "");
-      return { postId, raw: data };
+
+      const payload = data?.createPost;
+      if (!payload) throw new Error("Buffer returned no response for createPost");
+      if (payload.__typename !== "PostActionSuccess") {
+        throw new Error(`Buffer rejected the post (${payload.__typename}): ${payload.message ?? "unknown error"}`);
+      }
+      const post = payload.post;
+      if (!post?.id) throw new Error("Buffer accepted the post but returned no post id");
+
+      // Proof of success: re-read the post from Buffer.
+      const proof = await getPostProof(post.id);
+      return {
+        postId: post.id,
+        status: proof?.status ?? post.status ?? null,
+        dueAt: proof?.dueAt ?? post.dueAt ?? null,
+        sentAt: proof?.sentAt ?? post.sentAt ?? null,
+        permalink: proof?.permalink ?? post.externalLink ?? null,
+        channelId: post.channelId ?? channelId,
+        shareMode: post.shareMode ?? mode,
+        verified: Boolean(proof),
+        raw: { created: post, verified: proof?.raw ?? null },
+      };
     },
+
+    getPostProof,
+
     async getPost(id) {
       try {
-        const data = await gql<{ post: { id: string; analytics?: Record<string, number> } | null }>(
-          `query Post($id: String!) { post(id: $id) { id analytics } }`,
+        const d = await gql<{ post: any }>(
+          `query P($id: PostId!) { post(input: { id: $id }) { ${POST_FIELDS} metrics { name type value unit } } }`,
           { id },
         );
-        if (!data.post) return null;
-        return { analytics: data.post.analytics ?? {}, raw: data.post };
+        if (!d?.post) return null;
+        return { analytics: normalizeBufferMetrics(d.post.metrics ?? []), raw: d.post };
       } catch {
         return null;
       }
     },
+
     async getChannelPostsMetrics(channelId, limit = 50) {
+      const organizationId = await getOrganizationId();
+      if (!organizationId) return [];
       try {
-        const data = await gql<{
-          posts: {
-            nodes: Array<{
-              id: string;
-              text: string | null;
-              sentAt: string | null;
-              metricsUpdatedAt: string | null;
-              metrics: Array<{ type?: string | null; name?: string | null; value: number | string | null; unit?: string | null }> | null;
-            }>;
-          };
-        }>(
-          `query GetChannelPostsMetrics($channelId: String!, $limit: Int!) {
-            posts(input: { channelId: $channelId, status: SENT, limit: $limit }) {
-              nodes {
-                id
-                text
-                sentAt
-                metricsUpdatedAt
-                metrics { type name value unit }
-              }
+        const data = await gql<{ posts: { edges: Array<{ node: any }> } }>(
+          `query ChannelPosts($org: OrganizationId!, $ch: ChannelId!, $n: Int!) {
+            posts(first: $n, input: { organizationId: $org, filter: { channelIds: [$ch], status: [sent] } }) {
+              edges { node { ${POST_FIELDS} metrics { name type value unit } } }
             }
           }`,
-          { channelId, limit },
+          { org: organizationId, ch: channelId, n: limit },
         );
-        return (data.posts?.nodes ?? []).map((n) => ({
+        return (data.posts?.edges ?? []).map((e) => e.node).filter(Boolean).map((n: any) => ({
           id: n.id,
-          text: n.text,
-          sentAt: n.sentAt,
-          metricsUpdatedAt: n.metricsUpdatedAt,
+          text: n.text ?? null,
+          sentAt: n.sentAt ?? null,
+          metricsUpdatedAt: n.metricsUpdatedAt ?? null,
           metrics: normalizeBufferMetrics(n.metrics ?? []),
           raw: n,
         }));
