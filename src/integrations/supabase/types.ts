@@ -802,45 +802,60 @@ export type Database = {
       published_posts: {
         Row: {
           buffer_post_id: string | null
+          buffer_status: string | null
           campaign_id: string | null
           channel_id: string | null
           created_at: string
+          due_at: string | null
           id: string
           metrics_updated_at: string | null
           permalink: string | null
           platform: string | null
           posted_at: string | null
           raw: Json | null
-          run_id: string
+          run_id: string | null
+          source: string
+          text_content: string | null
           user_id: string
+          verified_at: string | null
         }
         Insert: {
           buffer_post_id?: string | null
+          buffer_status?: string | null
           campaign_id?: string | null
           channel_id?: string | null
           created_at?: string
+          due_at?: string | null
           id?: string
           metrics_updated_at?: string | null
           permalink?: string | null
           platform?: string | null
           posted_at?: string | null
           raw?: Json | null
-          run_id: string
+          run_id?: string | null
+          source?: string
+          text_content?: string | null
           user_id: string
+          verified_at?: string | null
         }
         Update: {
           buffer_post_id?: string | null
+          buffer_status?: string | null
           campaign_id?: string | null
           channel_id?: string | null
           created_at?: string
+          due_at?: string | null
           id?: string
           metrics_updated_at?: string | null
           permalink?: string | null
           platform?: string | null
           posted_at?: string | null
           raw?: Json | null
-          run_id?: string
+          run_id?: string | null
+          source?: string
+          text_content?: string | null
           user_id?: string
+          verified_at?: string | null
         }
         Relationships: [
           {
