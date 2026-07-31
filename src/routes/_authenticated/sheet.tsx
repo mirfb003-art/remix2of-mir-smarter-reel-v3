@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { listRuns } from "@/lib/runs.functions";
+import { listRuns, listImportedPosts } from "@/lib/runs.functions";
 import { useActiveCampaignId } from "@/lib/active-campaign";
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,6 +28,10 @@ type Row = {
   caption: string;
   hashtags: string[];
   buffer_post_id: string | null;
+  buffer_status: string | null;
+  permalink: string | null;
+  verified: string;
+  source: string;
   posted_at: string | null;
   views: number | null; likes: number | null; comments: number | null;
   shares: number | null; saves: number | null; reach: number | null; impressions: number | null;
@@ -57,11 +61,41 @@ function flatten(runs: any[]): Row[] {
       caption: cap.text ?? "",
       hashtags: cap.hashtags ?? [],
       buffer_post_id: pp.buffer_post_id ?? null,
+      buffer_status: pp.buffer_status ?? null,
+      permalink: pp.permalink ?? null,
+      verified: pp.verified_at ? "✓ confirmed" : pp.buffer_post_id ? "pending" : "—",
+      source: pp.source ?? "app",
       posted_at: pp.posted_at ?? null,
       views: an.views ?? null, likes: an.likes ?? null, comments: an.comments ?? null,
       shares: an.shares ?? null, saves: an.saves ?? null, reach: an.reach ?? null, impressions: an.impressions ?? null,
       worked: lr.worked ?? null,
       learning: lr.change_recommendation ?? null,
+    };
+  });
+}
+
+function flattenImported(posts: any[]): Row[] {
+  return (posts ?? []).map((p) => {
+    const an = p.post_analytics?.[0] ?? {};
+    return {
+      run_number: 0,
+      status: p.buffer_status ?? "sent",
+      strategy_used: null, next_strategy: null, error: null, duration_ms: null,
+      started_at: p.posted_at ?? p.due_at ?? "",
+      finished_at: p.posted_at ?? null,
+      url: p.permalink ?? "",
+      summary: "", topic: "",
+      caption: p.text_content ?? "",
+      hashtags: [],
+      buffer_post_id: p.buffer_post_id ?? null,
+      buffer_status: p.buffer_status ?? null,
+      permalink: p.permalink ?? null,
+      verified: p.verified_at ? "✓ confirmed" : "pending",
+      source: "buffer",
+      posted_at: p.posted_at ?? null,
+      views: an.views ?? null, likes: an.likes ?? null, comments: an.comments ?? null,
+      shares: an.shares ?? null, saves: an.saves ?? null, reach: an.reach ?? null, impressions: an.impressions ?? null,
+      worked: null, learning: null,
     };
   });
 }
@@ -73,7 +107,11 @@ const cols: Array<{ key: keyof Row; label: string }> = [
   { key: "topic", label: "Topic" },
   { key: "caption", label: "Caption" },
   { key: "hashtags", label: "Hashtags" },
+  { key: "source", label: "Source" },
   { key: "buffer_post_id", label: "Buffer ID" },
+  { key: "buffer_status", label: "Buffer status" },
+  { key: "verified", label: "Proof" },
+  { key: "permalink", label: "Permalink" },
   { key: "views", label: "Views" },
   { key: "likes", label: "Likes" },
   { key: "comments", label: "Comments" },
@@ -106,9 +144,15 @@ function download(name: string, mime: string, data: string | Blob) {
 
 function SheetPage() {
   const fn = useServerFn(listRuns);
+  const importedFn = useServerFn(listImportedPosts);
   const campaignId = useActiveCampaignId();
   const { data } = useQuery({ queryKey: ["runs", campaignId], queryFn: () => fn({ data: { campaign_id: campaignId } }), refetchInterval: 15000 });
-  const rows = useMemo(() => flatten(data ?? []), [data]);
+  const { data: imported } = useQuery({ queryKey: ["imported-posts"], queryFn: () => importedFn(), refetchInterval: 60000 });
+  const rows = useMemo(
+    () => [...flatten(data ?? []), ...flattenImported(imported ?? [])]
+      .sort((a, b) => new Date(b.started_at || 0).getTime() - new Date(a.started_at || 0).getTime()),
+    [data, imported],
+  );
   const [q, setQ] = useState("");
   const [page, setPage] = useState(0);
   const perPage = 25;
@@ -135,7 +179,7 @@ function SheetPage() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Sheet</h1>
-          <p className="text-sm text-muted-foreground">Every run, every metric — auto-updating.</p>
+          <p className="text-sm text-muted-foreground">Every run and every Buffer post, with publish proof and live metrics.</p>
         </div>
         <div className="flex gap-2">
           <Input placeholder="Search…" value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }} className="w-56" />
@@ -161,6 +205,7 @@ function SheetPage() {
                     {cols.map((c) => {
                       const v = r[c.key];
                       if (c.key === "status") return <td key={c.key} className="px-3 py-2"><Badge variant="outline">{String(v)}</Badge></td>;
+                      if (c.key === "permalink") return <td key={c.key} className="px-3 py-2 max-w-[180px] truncate">{v ? <a href={String(v)} target="_blank" rel="noreferrer" className="text-primary underline">open</a> : ""}</td>;
                       if (c.key === "url" || c.key === "caption" || c.key === "summary" || c.key === "topic" || c.key === "learning") {
                         return <td key={c.key} className="px-3 py-2 max-w-[220px] truncate" title={String(v ?? "")}>{String(v ?? "")}</td>;
                       }
