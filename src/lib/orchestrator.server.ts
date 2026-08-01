@@ -438,6 +438,11 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
   const t0 = Date.now();
   // Campaign-scoped AI keys with global workspace fallback.
   const aiSettings = await resolveCampaignAISettings(sb, userId, campaignId);
+  const { data: aiSet } = campaignId
+    ? (await sb.from("ai_settings").select("*").eq("user_id", userId).eq("campaign_id", campaignId).maybeSingle()).data
+      ? await sb.from("ai_settings").select("*").eq("user_id", userId).eq("campaign_id", campaignId).maybeSingle()
+      : await sb.from("ai_settings").select("*").eq("user_id", userId).is("campaign_id", null).maybeSingle()
+    : await sb.from("ai_settings").select("*").eq("user_id", userId).is("campaign_id", null).maybeSingle();
 
   // Determine learning scope. By default, learning is isolated per campaign.
   // If the campaign has share_learning=true (or the run has no campaign), fall back to user-wide learning.
