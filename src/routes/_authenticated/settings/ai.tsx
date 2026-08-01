@@ -66,6 +66,7 @@ function AiSettings() {
       default_hashtags: state.default_hashtags ?? [], max_caption_length: state.max_caption_length,
       temperature: Number(state.temperature), model: state.model,
       user_instructions: state.user_instructions ?? null,
+      campaign_id: campaignId,
     } }),
     onSuccess: () => { toast.success("Saved"); qc.invalidateQueries({ queryKey: ["settings"] }); },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
@@ -77,7 +78,11 @@ function AiSettings() {
     <div className="space-y-6 max-w-3xl">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">AI Objective & Providers</h1>
-        <p className="text-sm text-muted-foreground">Configure the goal, voice, and AI providers Loop uses.</p>
+        <p className="text-sm text-muted-foreground">
+          {campaignId
+            ? "Campaign override — saving here creates AI settings just for the selected campaign. Switch to Global Mode to edit the shared workspace defaults."
+            : "Global workspace defaults — used by every campaign without its own override."}
+        </p>
       </div>
 
       <Tabs defaultValue="objective">
@@ -139,7 +144,7 @@ function AiSettings() {
               catalog={catalog}
               initial={resolved}
               onSave={async (payload) => {
-                await updProviders({ data: payload });
+                await updProviders({ data: { ...payload, campaign_id: campaignId } });
                 toast.success("Providers saved");
                 qc.invalidateQueries({ queryKey: ["ai-resolved"] });
               }}
