@@ -2,15 +2,19 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
-export const listBufferCreds = createServerFn({ method: "GET" })
+export const listBufferCreds = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
+  .inputValidator((d: unknown) => z.object({ campaign_id: z.string().uuid().nullable().optional() }).optional().parse(d))
+  .handler(async ({ data, context }) => {
+    let q = context.supabase
       .from("buffer_credentials")
-      .select("id,label,graphql_endpoint,status,last_tested_at,created_at")
+      .select("id,label,graphql_endpoint,status,last_tested_at,created_at,campaign_id")
       .order("created_at", { ascending: false });
+    // Campaign mode: campaign-specific tokens plus shared workspace tokens.
+    if (data?.campaign_id) q = q.or(`campaign_id.eq.${data.campaign_id},campaign_id.is.null`);
+    const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
-    return data ?? [];
+    return rows ?? [];
   });
 
 const saveSchema = z.object({
@@ -18,6 +22,7 @@ const saveSchema = z.object({
   label: z.string().min(1).max(80),
   api_token: z.string().min(10),
   graphql_endpoint: z.string().url().default("https://api.buffer.com"),
+  campaign_id: z.string().uuid().nullable().optional(),
 });
 
 export const saveBufferCred = createServerFn({ method: "POST" })
@@ -27,7 +32,12 @@ export const saveBufferCred = createServerFn({ method: "POST" })
     if (data.id) {
       const { error } = await context.supabase
         .from("buffer_credentials")
-        .update({ label: data.label, api_token: data.api_token, graphql_endpoint: data.graphql_endpoint })
+        .update({
+          label: data.label,
+          api_token: data.api_token,
+          graphql_endpoint: data.graphql_endpoint,
+          campaign_id: data.campaign_id ?? null,
+        })
         .eq("id", data.id);
       if (error) throw new Error(error.message);
       return { id: data.id };
@@ -39,6 +49,7 @@ export const saveBufferCred = createServerFn({ method: "POST" })
         label: data.label,
         api_token: data.api_token,
         graphql_endpoint: data.graphql_endpoint,
+        campaign_id: data.campaign_id ?? null,
       })
       .select("id")
       .single();
