@@ -16,6 +16,7 @@ import { Route as AuthenticatedSheetRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedQueueRouteImport } from './routes/_authenticated/queue'
 import { Route as AuthenticatedLearningRouteImport } from './routes/_authenticated/learning'
 import { Route as AuthenticatedInsightsRouteImport } from './routes/_authenticated/insights'
+import { Route as AuthenticatedGlobalDashboardRouteImport } from './routes/_authenticated/global-dashboard'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedCampaignsRouteImport } from './routes/_authenticated/campaigns'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
@@ -62,6 +63,12 @@ const AuthenticatedInsightsRoute = AuthenticatedInsightsRouteImport.update({
   path: '/insights',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedGlobalDashboardRoute =
+  AuthenticatedGlobalDashboardRouteImport.update({
+    id: '/global-dashboard',
+    path: '/global-dashboard',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -130,6 +137,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/campaigns': typeof AuthenticatedCampaignsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/global-dashboard': typeof AuthenticatedGlobalDashboardRoute
   '/insights': typeof AuthenticatedInsightsRoute
   '/learning': typeof AuthenticatedLearningRoute
   '/queue': typeof AuthenticatedQueueRoute
@@ -149,6 +157,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/campaigns': typeof AuthenticatedCampaignsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/global-dashboard': typeof AuthenticatedGlobalDashboardRoute
   '/insights': typeof AuthenticatedInsightsRoute
   '/learning': typeof AuthenticatedLearningRoute
   '/queue': typeof AuthenticatedQueueRoute
@@ -170,6 +179,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/campaigns': typeof AuthenticatedCampaignsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/global-dashboard': typeof AuthenticatedGlobalDashboardRoute
   '/_authenticated/insights': typeof AuthenticatedInsightsRoute
   '/_authenticated/learning': typeof AuthenticatedLearningRoute
   '/_authenticated/queue': typeof AuthenticatedQueueRoute
@@ -191,6 +201,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/campaigns'
     | '/dashboard'
+    | '/global-dashboard'
     | '/insights'
     | '/learning'
     | '/queue'
@@ -210,6 +221,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/campaigns'
     | '/dashboard'
+    | '/global-dashboard'
     | '/insights'
     | '/learning'
     | '/queue'
@@ -230,6 +242,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/campaigns'
     | '/_authenticated/dashboard'
+    | '/_authenticated/global-dashboard'
     | '/_authenticated/insights'
     | '/_authenticated/learning'
     | '/_authenticated/queue'
@@ -303,6 +316,13 @@ declare module '@tanstack/react-router' {
       path: '/insights'
       fullPath: '/insights'
       preLoaderRoute: typeof AuthenticatedInsightsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/global-dashboard': {
+      id: '/_authenticated/global-dashboard'
+      path: '/global-dashboard'
+      fullPath: '/global-dashboard'
+      preLoaderRoute: typeof AuthenticatedGlobalDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/dashboard': {
@@ -388,6 +408,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedCampaignsRoute: typeof AuthenticatedCampaignsRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedGlobalDashboardRoute: typeof AuthenticatedGlobalDashboardRoute
   AuthenticatedInsightsRoute: typeof AuthenticatedInsightsRoute
   AuthenticatedLearningRoute: typeof AuthenticatedLearningRoute
   AuthenticatedQueueRoute: typeof AuthenticatedQueueRoute
@@ -403,6 +424,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCampaignsRoute: AuthenticatedCampaignsRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedGlobalDashboardRoute: AuthenticatedGlobalDashboardRoute,
   AuthenticatedInsightsRoute: AuthenticatedInsightsRoute,
   AuthenticatedLearningRoute: AuthenticatedLearningRoute,
   AuthenticatedQueueRoute: AuthenticatedQueueRoute,

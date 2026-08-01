@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 const UNLOCK_KEY = "loop:unlocked";
 
 const nav = [
+  { to: "/global-dashboard", label: "Global", icon: Globe },
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/campaigns", label: "Campaigns", icon: FolderKanban },
   { to: "/queue", label: "Queue", icon: ListVideo },
