@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useScopedCampaignId } from "@/components/campaign-context";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listTrends, listPredictionAccuracy, listStrategies } from "@/lib/insights.functions";
@@ -13,10 +14,11 @@ function InsightsPage() {
   const trendsFn = useServerFn(listTrends);
   const predFn = useServerFn(listPredictionAccuracy);
   const stratFn = useServerFn(listStrategies);
+  const campaignId = useScopedCampaignId();
 
-  const { data: trends } = useQuery({ queryKey: ["insight_trends"], queryFn: () => trendsFn() });
-  const { data: predictions } = useQuery({ queryKey: ["prediction_accuracy"], queryFn: () => predFn() });
-  const { data: strategies } = useQuery({ queryKey: ["strategies"], queryFn: () => stratFn() });
+  const { data: trends } = useQuery({ queryKey: ["insight_trends", campaignId], queryFn: () => trendsFn({ data: { campaign_id: campaignId } }) });
+  const { data: predictions } = useQuery({ queryKey: ["prediction_accuracy", campaignId], queryFn: () => predFn({ data: { campaign_id: campaignId } }) });
+  const { data: strategies } = useQuery({ queryKey: ["strategies", campaignId], queryFn: () => stratFn({ data: { campaign_id: campaignId } }) });
 
   const avgAccuracy = (() => {
     const rows = predictions ?? [];

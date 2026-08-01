@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useScopedCampaignId } from "@/components/campaign-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listMemory, resetMemory, exportMemory, importMemory, deleteInsight } from "@/lib/memory.functions";
@@ -19,9 +20,10 @@ function LearningPage() {
   const imp = useServerFn(importMemory);
   const del = useServerFn(deleteInsight);
   const qc = useQueryClient();
+  const campaignId = useScopedCampaignId();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const { data } = useQuery({ queryKey: ["memory"], queryFn: () => list() });
+  const { data } = useQuery({ queryKey: ["memory", campaignId], queryFn: () => list({ data: { campaign_id: campaignId } }) });
 
   const resetMut = useMutation({
     mutationFn: () => reset(),

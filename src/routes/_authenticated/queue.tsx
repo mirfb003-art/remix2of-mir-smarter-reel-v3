@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
 import { listQueue, addToQueue, removeFromQueue, resetQueueItem, moveQueueItem, listDeadLetters, retryDeadLetter } from "@/lib/queue.functions";
 import { listChannels } from "@/lib/channels.functions";
-import { useActiveCampaignId } from "@/lib/active-campaign";
+import { useScopedCampaignId } from "@/components/campaign-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -27,7 +27,7 @@ function QueuePage() {
   const retryDl = useServerFn(retryDeadLetter);
   const qc = useQueryClient();
 
-  const campaignId = useActiveCampaignId();
+  const campaignId = useScopedCampaignId();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [text, setText] = useState("");
@@ -37,8 +37,8 @@ function QueuePage() {
     queryKey: ["queue", campaignId],
     queryFn: () => list({ data: { campaign_id: campaignId } }),
   });
-  const { data: channels } = useQuery({ queryKey: ["channels"], queryFn: () => chans() });
-  const { data: deadItems } = useQuery({ queryKey: ["dead-letters"], queryFn: () => dead() });
+  const { data: channels } = useQuery({ queryKey: ["channels", campaignId], queryFn: () => chans({ data: { campaign_id: campaignId } }) });
+  const { data: deadItems } = useQuery({ queryKey: ["dead-letters", campaignId], queryFn: () => dead({ data: { campaign_id: campaignId } }) });
 
   const addMut = useMutation({
     mutationFn: (urls: string[]) => add({ data: { urls, channel_id: channelId || null, campaign_id: campaignId } }),

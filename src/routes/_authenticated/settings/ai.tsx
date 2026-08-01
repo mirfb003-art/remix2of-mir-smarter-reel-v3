@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useScopedCampaignId } from "@/components/campaign-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getAllSettings, updateAiSettings } from "@/lib/settings.functions";
@@ -49,10 +50,11 @@ function AiSettings() {
   const discover = useServerFn(discoverGeminiModels);
 
   const qc = useQueryClient();
+  const campaignId = useScopedCampaignId();
 
-  const { data } = useQuery({ queryKey: ["settings"], queryFn: () => get() });
+  const { data } = useQuery({ queryKey: ["settings", campaignId], queryFn: () => get({ data: { campaign_id: campaignId } }) });
   const { data: catalog } = useQuery({ queryKey: ["ai-catalog"], queryFn: () => getCatalog() });
-  const { data: resolved } = useQuery({ queryKey: ["ai-resolved"], queryFn: () => getResolved() });
+  const { data: resolved } = useQuery({ queryKey: ["ai-resolved", campaignId], queryFn: () => getResolved({ data: { campaign_id: campaignId } }) });
 
   const [state, setState] = useState<any>(null);
   useEffect(() => { if (data?.ai) setState(data.ai); }, [data]);

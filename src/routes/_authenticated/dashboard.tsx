@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { dashboardStats, manualRun } from "@/lib/runs.functions";
 import { listChannels } from "@/lib/channels.functions";
-import { useActiveCampaignId } from "@/lib/active-campaign";
+import { useScopedCampaignId } from "@/components/campaign-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,14 +21,14 @@ function DashboardPage() {
   const manual = useServerFn(manualRun);
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const campaignId = useActiveCampaignId();
+  const campaignId = useScopedCampaignId();
   const [channelId, setChannelId] = useState<string>("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard", campaignId],
     queryFn: () => stats({ data: { campaign_id: campaignId } }),
   });
-  const { data: chans } = useQuery({ queryKey: ["channels"], queryFn: () => channels() });
+  const { data: chans } = useQuery({ queryKey: ["channels", campaignId], queryFn: () => channels({ data: { campaign_id: campaignId } }) });
 
   const run = useMutation({
     mutationFn: (id: string) => manual({ data: { channel_id: id, campaign_id: campaignId } }),
