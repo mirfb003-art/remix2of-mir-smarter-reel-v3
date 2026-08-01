@@ -32,14 +32,17 @@ function computeNextRun(mode: string, interval_hours: number | null | undefined,
   return null;
 }
 
-export const listSchedules = createServerFn({ method: "GET" })
+export const listSchedules = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { data, error } = await context.supabase.from("schedules")
+  .inputValidator((d: unknown) => z.object({ campaign_id: z.string().uuid().nullable().optional() }).optional().parse(d))
+  .handler(async ({ data, context }) => {
+    let q = context.supabase.from("schedules")
       .select("id,channel_id,campaign_id,mode,interval_hours,daily_times,next_run_at,last_run_at,active,paused,publish_mode,custom_scheduled_at,publish_delay_minutes")
       .order("created_at", { ascending: false });
+    if (data?.campaign_id) q = q.eq("campaign_id", data.campaign_id);
+    const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
-    return data ?? [];
+    return rows ?? [];
   });
 
 export const upsertSchedule = createServerFn({ method: "POST" })
