@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import {
-  PROVIDER_META, MODEL_REGISTRY, healthCheckProvider, resolveAISettings,
+  PROVIDER_META, MODEL_REGISTRY, healthCheckProvider,
   type ProviderId, type ProviderConfig,
 } from "./ai-gateway.server";
 
@@ -17,6 +17,7 @@ const providerConfigSchema = z.object({
 });
 
 const providersSchema = z.object({
+  campaign_id: z.string().uuid().nullable().optional(),
   mode: z.enum(["strict","fallback"]),
   activeProvider: z.enum(providerIds),
   fallbackChain: z.array(z.enum(providerIds)),
@@ -30,13 +31,25 @@ export const updateAIProviders = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => providersSchema.parse(d))
   .handler(async ({ data, context }) => {
-    const { error } = await context.supabase.from("ai_settings").upsert({
-      user_id: context.userId,
+    const sb = context.supabase;
+    const campaignId = data.campaign_id ?? null;
+    const fields = {
       provider_mode: data.mode,
       active_provider: data.activeProvider,
       fallback_chain: data.fallbackChain as never,
       providers_config: data.providers as never,
-    }, { onConflict: "user_id" });
+    };
+    const base = sb.from("ai_settings").select("id").eq("user_id", context.userId);
+    const { data: existing } = campaignId
+      ? await base.eq("campaign_id", campaignId).maybeSingle()
+      : await base.is("campaign_id", null).maybeSingle();
+    if (existing) {
+      const { error } = await sb.from("ai_settings").update(fields).eq("id", existing.id);
+      if (error) throw new Error(error.message);
+      return { ok: true };
+    }
+    const { error } = await sb.from("ai_settings")
+      .insert({ ...fields, user_id: context.userId, campaign_id: campaignId });
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -56,11 +69,12 @@ export const runHealthCheck = createServerFn({ method: "POST" })
     return healthCheckProvider(cfg);
   });
 
-export const getResolvedAISettings = createServerFn({ method: "GET" })
+export const getResolvedAISettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { data } = await context.supabase.from("ai_settings").select("*").eq("user_id", context.userId).maybeSingle();
-    return resolveAISettings(data);
+  .inputValidator((d: unknown) => z.object({ campaign_id: z.string().uuid().nullable().optional() }).optional().parse(d))
+  .handler(async ({ data, context }) => {
+    const { resolveCampaignAISettings } = await import("./ai-gateway.server");
+    return resolveCampaignAISettings(context.supabase, context.userId, data?.campaign_id ?? null);
   });
 
 export const discoverGeminiModels = createServerFn({ method: "POST" })
