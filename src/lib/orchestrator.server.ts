@@ -2,7 +2,7 @@
 // Step-based state machine — resumes from last completed step on retry.
 import { generateText } from "ai";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { executeAIRequest, resolveAISettings, type AISettingsSchema } from "./ai-gateway.server";
+import { executeAIRequest, resolveAISettings, resolveCampaignAISettings, type AISettingsSchema } from "./ai-gateway.server";
 import {
   withRetry, audit, acquireChannelLock, releaseChannelLock,
   refreshHeartbeat, getActivePromptVersion, makeIdempotencyKey,
@@ -281,9 +281,10 @@ async function resolvePublishPlan(sb: Sb, campaignId: string | null, channelId: 
 async function stepPublish(
   sb: Sb, userId: string, runId: string, channel: any, caption: any, videoUrl: string,
   plan: PublishPlan = { mode: "addToQueue", dueAt: null },
+  campaignId: string | null = null,
 ) {
-  const cred = channel.buffer_credentials;
-  const { makeBufferClient } = await import("./buffer.server");
+  const { makeBufferClient, resolveBufferCredential } = await import("./buffer.server");
+  const cred = await resolveBufferCredential(sb, userId, campaignId, channel.buffer_credentials);
   const buffer = makeBufferClient(cred.api_token, cred.graphql_endpoint);
 
   const t0 = Date.now();
@@ -435,8 +436,8 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
   const channelId = channel.id;
   const campaignId: string | null = run.campaign_id ?? null;
   const t0 = Date.now();
-  const { data: aiSet } = await sb.from("ai_settings").select("*").eq("user_id", userId).maybeSingle();
-  const aiSettings = resolveAISettings(aiSet);
+  // Campaign-scoped AI keys with global workspace fallback.
+  const aiSettings = await resolveCampaignAISettings(sb, userId, campaignId);
 
   // Determine learning scope. By default, learning is isolated per campaign.
   // If the campaign has share_learning=true (or the run has no campaign), fall back to user-wide learning.

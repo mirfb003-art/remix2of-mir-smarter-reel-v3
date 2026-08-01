@@ -243,3 +243,32 @@ export function makeBufferClient(token: string, endpoint: string): BufferClient 
     },
   };
 }
+
+/**
+ * Campaign-aware Buffer credential resolution.
+ * Order: campaign-specific credential → the channel's own credential →
+ * a shared workspace credential (campaign_id IS NULL).
+ */
+export async function resolveBufferCredential(
+  sb: any,
+  userId: string,
+  campaignId: string | null | undefined,
+  channelCredential?: { api_token: string; graphql_endpoint: string } | null,
+): Promise<{ api_token: string; graphql_endpoint: string }> {
+  if (campaignId) {
+    const { data } = await sb.from("buffer_credentials")
+      .select("api_token,graphql_endpoint")
+      .eq("user_id", userId).eq("campaign_id", campaignId)
+      .order("created_at", { ascending: false })
+      .limit(1).maybeSingle();
+    if (data?.api_token) return data;
+  }
+  if (channelCredential?.api_token) return channelCredential;
+  const { data } = await sb.from("buffer_credentials")
+    .select("api_token,graphql_endpoint")
+    .eq("user_id", userId).is("campaign_id", null)
+    .order("created_at", { ascending: false })
+    .limit(1).maybeSingle();
+  if (data?.api_token) return data;
+  throw new Error("No Buffer credential available for this campaign.");
+}
