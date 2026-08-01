@@ -2,13 +2,16 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
-export const listMemory = createServerFn({ method: "GET" })
+export const listMemory = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { data, error } = await context.supabase.from("memory_insights")
+  .inputValidator((d: unknown) => z.object({ campaign_id: z.string().uuid().nullable().optional() }).optional().parse(d))
+  .handler(async ({ data, context }) => {
+    let q = context.supabase.from("memory_insights")
       .select("*").order("confidence", { ascending: false }).limit(500);
+    if (data?.campaign_id) q = q.eq("campaign_id", data.campaign_id);
+    const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
-    return data ?? [];
+    return rows ?? [];
   });
 
 export const resetMemory = createServerFn({ method: "POST" })
