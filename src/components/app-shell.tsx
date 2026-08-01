@@ -2,13 +2,15 @@ import { useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   LayoutDashboard, ListVideo, Table2, Brain, LogOut, Sparkles, TrendingUp,
-  Cable, Wand2, Search, Clock, SlidersHorizontal, FolderKanban, Menu,
+  Cable, Wand2, Search, Clock, SlidersHorizontal, FolderKanban, Menu, Globe,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { CampaignSelector } from "@/components/campaign-selector";
 import { InstructionsDialog } from "@/components/instructions-dialog";
+import { ActiveCampaignProvider, useCampaignScope } from "@/components/campaign-context";
+import { Badge } from "@/components/ui/badge";
 
 const UNLOCK_KEY = "loop:unlocked";
 
@@ -41,6 +43,10 @@ function SidebarContent({ onNavigate, onLock }: { onNavigate?: () => void; onLoc
           <div className="text-sm font-semibold truncate">Loop</div>
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground truncate">Adaptive Publisher</div>
         </div>
+      </div>
+
+      <div className="px-3 pt-3">
+        <GlobalModeButton onNavigate={onNavigate} />
       </div>
 
       <div className="px-3 pt-3">
@@ -104,7 +110,36 @@ function SidebarContent({ onNavigate, onLock }: { onNavigate?: () => void; onLoc
   );
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
+function GlobalModeButton({ onNavigate }: { onNavigate?: () => void }) {
+  const { mode, setMode } = useCampaignScope();
+  const navigate = useNavigate();
+  return (
+    <Button
+      variant={mode === "global" ? "default" : "outline"}
+      size="sm"
+      className="w-full justify-start"
+      onClick={() => {
+        setMode(mode === "global" ? "campaign" : "global");
+        onNavigate?.();
+        if (mode !== "global") navigate({ to: "/global-dashboard" });
+      }}
+    >
+      <Globe className="h-4 w-4 mr-2" />
+      {mode === "global" ? "Global Mode: on" : "Main Global Dashboard"}
+    </Button>
+  );
+}
+
+function ScopeBadge() {
+  const { mode, activeCampaign } = useCampaignScope();
+  return (
+    <Badge variant={mode === "global" ? "default" : "secondary"} className="mr-auto">
+      {mode === "global" ? "Global workspace — all campaigns" : `Campaign: ${activeCampaign?.name ?? "none selected"}`}
+    </Badge>
+  );
+}
+
+function AppShellInner({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
@@ -144,7 +179,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         </header>
 
         {/* Desktop top bar */}
-        <header className="hidden md:flex sticky top-0 z-30 items-center justify-end gap-2 border-b border-sidebar-border bg-background/80 backdrop-blur px-6 py-2">
+        <header className="hidden md:flex sticky top-0 z-30 items-center gap-2 border-b border-sidebar-border bg-background/80 backdrop-blur px-6 py-2">
+          <ScopeBadge />
           <InstructionsDialog />
         </header>
 
@@ -154,5 +190,13 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
 
     </div>
+  );
+}
+
+export function AppShell({ children }: { children: ReactNode }) {
+  return (
+    <ActiveCampaignProvider>
+      <AppShellInner>{children}</AppShellInner>
+    </ActiveCampaignProvider>
   );
 }
