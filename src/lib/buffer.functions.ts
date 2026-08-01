@@ -105,7 +105,7 @@ export const syncBufferChannels = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: cred, error } = await context.supabase
       .from("buffer_credentials")
-      .select("api_token")
+      .select("api_token,campaign_id")
       .eq("id", data.id)
       .single();
     if (error || !cred) throw new Error("Credential not found");
@@ -165,12 +165,13 @@ export const syncBufferChannels = createServerFn({ method: "POST" })
       const name = ch.name || ch.service || "Channel";
       const platform = (ch.service || "unknown").toLowerCase();
       if (existingMap.has(ch.id)) {
-        await context.supabase.from("channels").update({ name, platform }).eq("id", existingMap.get(ch.id)!);
+        await context.supabase.from("channels").update({ name, platform, campaign_id: (cred as any).campaign_id ?? null }).eq("id", existingMap.get(ch.id)!);
       } else {
         await context.supabase.from("channels").insert({
           user_id: context.userId,
           credential_id: data.id,
           buffer_channel_id: ch.id,
+          campaign_id: (cred as any).campaign_id ?? null,
           name,
           platform,
           active: true,
