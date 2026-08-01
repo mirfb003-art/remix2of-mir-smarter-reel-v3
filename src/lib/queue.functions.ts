@@ -96,16 +96,19 @@ export const retryDeadLetter = createServerFn({ method: "POST" })
   });
 
 // List all dead-lettered items with attempt/limit metadata.
-export const listDeadLetters = createServerFn({ method: "GET" })
+export const listDeadLetters = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
+  .inputValidator((d: unknown) => z.object({ campaign_id: z.string().uuid().nullable().optional() }).optional().parse(d))
+  .handler(async ({ data, context }) => {
+    let q = context.supabase
       .from("video_queue")
-      .select("id,cloudinary_url,attempts,max_attempts,error,last_error_module,dead_letter_at,channel_id")
+      .select("id,cloudinary_url,attempts,max_attempts,error,last_error_module,dead_letter_at,channel_id,campaign_id")
       .eq("status", "dead_letter")
       .order("dead_letter_at", { ascending: false });
+    if (data?.campaign_id) q = q.eq("campaign_id", data.campaign_id);
+    const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
-    return data ?? [];
+    return rows ?? [];
   });
 
 // Swap the position of two adjacent (or any two) queue items.
