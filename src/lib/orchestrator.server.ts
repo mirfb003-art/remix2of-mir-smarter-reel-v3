@@ -2,7 +2,7 @@
 // Step-based state machine — resumes from last completed step on retry.
 import { generateText } from "ai";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { executeAIRequest, resolveAISettings, resolveCampaignAISettings, type AISettingsSchema } from "./ai-gateway.server";
+import { executeAIRequest, resolveCampaignAISettings, type AISettingsSchema } from "./ai-gateway.server";
 import {
   withRetry, audit, acquireChannelLock, releaseChannelLock,
   refreshHeartbeat, getActivePromptVersion, makeIdempotencyKey,
@@ -540,7 +540,7 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
       await refreshHeartbeat(sb, runId, channelId);
       const plan = await resolvePublishPlan(sb, campaignId, channelId);
       await audit(sb, { userId, runId, eventType: "publish.mode", module: "orchestrator", status: "info", payload: { publish_mode: plan.mode, due_at: plan.dueAt } });
-      const pub = await stepPublish(sb, userId, runId, channel, state.generate_caption!.caption, queueUrl, plan);
+      const pub = await stepPublish(sb, userId, runId, channel, state.generate_caption!.caption, queueUrl, plan, campaignId);
       state.publish = { done: true, postId: pub.postId, postedAt: pub.postedAt };
       await persistStepState(sb, runId, state, "finalize");
     }
