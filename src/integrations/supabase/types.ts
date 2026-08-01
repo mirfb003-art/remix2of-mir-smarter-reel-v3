@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           active_provider: string
           brand_tone: string
+          campaign_id: string | null
           created_at: string
           custom_objective: string | null
           default_hashtags: string[]
@@ -38,6 +39,7 @@ export type Database = {
         Insert: {
           active_provider?: string
           brand_tone?: string
+          campaign_id?: string | null
           created_at?: string
           custom_objective?: string | null
           default_hashtags?: string[]
@@ -58,6 +60,7 @@ export type Database = {
         Update: {
           active_provider?: string
           brand_tone?: string
+          campaign_id?: string | null
           created_at?: string
           custom_objective?: string | null
           default_hashtags?: string[]
@@ -75,7 +78,15 @@ export type Database = {
           user_id?: string
           user_instructions?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "ai_settings_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       analysis_settings: {
         Row: {
@@ -155,6 +166,7 @@ export type Database = {
       buffer_credentials: {
         Row: {
           api_token: string
+          campaign_id: string | null
           created_at: string
           graphql_endpoint: string
           id: string
@@ -166,6 +178,7 @@ export type Database = {
         }
         Insert: {
           api_token: string
+          campaign_id?: string | null
           created_at?: string
           graphql_endpoint?: string
           id?: string
@@ -177,6 +190,7 @@ export type Database = {
         }
         Update: {
           api_token?: string
+          campaign_id?: string | null
           created_at?: string
           graphql_endpoint?: string
           id?: string
@@ -186,7 +200,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "buffer_credentials_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       campaigns: {
         Row: {
@@ -301,6 +323,7 @@ export type Database = {
           active: boolean
           active_run_id: string | null
           buffer_channel_id: string
+          campaign_id: string | null
           created_at: string
           credential_id: string | null
           id: string
@@ -314,6 +337,7 @@ export type Database = {
           active?: boolean
           active_run_id?: string | null
           buffer_channel_id: string
+          campaign_id?: string | null
           created_at?: string
           credential_id?: string | null
           id?: string
@@ -327,6 +351,7 @@ export type Database = {
           active?: boolean
           active_run_id?: string | null
           buffer_channel_id?: string
+          campaign_id?: string | null
           created_at?: string
           credential_id?: string | null
           id?: string
@@ -337,6 +362,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "channels_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "channels_credential_id_fkey"
             columns: ["credential_id"]
@@ -595,6 +627,7 @@ export type Database = {
       }
       post_analytics: {
         Row: {
+          campaign_id: string | null
           comments: number | null
           fetched_at: string
           id: string
@@ -609,6 +642,7 @@ export type Database = {
           views: number | null
         }
         Insert: {
+          campaign_id?: string | null
           comments?: number | null
           fetched_at?: string
           id?: string
@@ -623,6 +657,7 @@ export type Database = {
           views?: number | null
         }
         Update: {
+          campaign_id?: string | null
           comments?: number | null
           fetched_at?: string
           id?: string
@@ -637,6 +672,13 @@ export type Database = {
           views?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "post_analytics_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "post_analytics_published_post_id_fkey"
             columns: ["published_post_id"]

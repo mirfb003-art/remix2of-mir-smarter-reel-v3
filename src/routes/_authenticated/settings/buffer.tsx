@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useState } from "react";
+import { useScopedCampaignId } from "@/components/campaign-context";
 import { Plug, Trash2, RefreshCw } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/settings/buffer")({ component: BufferSettings });
@@ -21,9 +22,10 @@ function BufferSettings() {
   const sync = useServerFn(syncBufferChannels);
   const chansFn = useServerFn(listChannels);
   const qc = useQueryClient();
+  const campaignId = useScopedCampaignId();
 
-  const { data: creds } = useQuery({ queryKey: ["buffer-creds"], queryFn: () => list() });
-  const { data: chans } = useQuery({ queryKey: ["channels"], queryFn: () => chansFn() });
+  const { data: creds } = useQuery({ queryKey: ["buffer-creds", campaignId], queryFn: () => list({ data: { campaign_id: campaignId } }) });
+  const { data: chans } = useQuery({ queryKey: ["channels", campaignId], queryFn: () => chansFn({ data: { campaign_id: campaignId } }) });
 
   const [label, setLabel] = useState("");
   const [token, setToken] = useState("");
@@ -41,7 +43,7 @@ function BufferSettings() {
   });
 
   const saveMut = useMutation({
-    mutationFn: () => save({ data: { label, api_token: token, graphql_endpoint: "https://api.buffer.com" } }),
+    mutationFn: () => save({ data: { label, api_token: token, graphql_endpoint: "https://api.buffer.com", campaign_id: campaignId } }),
     onSuccess: (r) => {
       toast.success("Saved");
       setLabel(""); setToken("");

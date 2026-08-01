@@ -2,14 +2,16 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
-export const getAllSettings = createServerFn({ method: "GET" })
+export const getAllSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((d: unknown) => z.object({ campaign_id: z.string().uuid().nullable().optional() }).optional().parse(d))
+  .handler(async ({ data, context }) => {
     const uid = context.userId;
     const sb = context.supabase;
+    const campaignId = data?.campaign_id ?? null;
 
     let [ai, analysis, general, profile] = await Promise.all([
-      sb.from("ai_settings").select("*").eq("user_id", uid).maybeSingle(),
+      sb.from("ai_settings").select("*").eq("user_id", uid).is("campaign_id", null).maybeSingle(),
       sb.from("analysis_settings").select("*").eq("user_id", uid).maybeSingle(),
       sb.from("settings").select("*").eq("user_id", uid).maybeSingle(),
       sb.from("profiles").select("*").eq("id", uid).maybeSingle(),
@@ -22,7 +24,22 @@ export const getAllSettings = createServerFn({ method: "GET" })
     if (!general.data) general = await sb.from("settings").insert({ user_id: uid }).select().maybeSingle();
     if (!profile.data) profile = await sb.from("profiles").insert({ id: uid }).select().maybeSingle();
 
-    return { ai: ai.data, analysis: analysis.data, general: general.data, profile: profile.data };
+    // Campaign mode: use the campaign override row when it exists, else the global row.
+    let aiRow = ai.data;
+    let aiIsCampaignOverride = false;
+    if (campaignId) {
+      const { data: camp } = await sb.from("ai_settings").select("*")
+        .eq("user_id", uid).eq("campaign_id", campaignId).maybeSingle();
+      if (camp) { aiRow = camp; aiIsCampaignOverride = true; }
+    }
+
+    return {
+      ai: aiRow,
+      ai_is_campaign_override: aiIsCampaignOverride,
+      analysis: analysis.data,
+      general: general.data,
+      profile: profile.data,
+    };
   });
 
 const aiSchema = z.object({
@@ -35,14 +52,36 @@ const aiSchema = z.object({
   temperature: z.number().min(0).max(2),
   model: z.string(),
   user_instructions: z.string().nullable().optional(),
+  campaign_id: z.string().uuid().nullable().optional(),
 });
 export const updateAiSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => aiSchema.parse(d))
   .handler(async ({ data, context }) => {
-    const { error } = await context.supabase
-      .from("ai_settings")
-      .upsert({ ...data, user_id: context.userId }, { onConflict: "user_id" });
+    const { campaign_id: campaignId = null, ...fields } = data;
+    const sb = context.supabase;
+    const base = sb.from("ai_settings").select("id").eq("user_id", context.userId);
+    const { data: existing } = campaignId
+      ? await base.eq("campaign_id", campaignId).maybeSingle()
+      : await base.is("campaign_id", null).maybeSingle();
+    if (existing) {
+      const { error } = await sb.from("ai_settings").update(fields).eq("id", existing.id);
+      if (error) throw new Error(error.message);
+      return { ok: true };
+    }
+    const { error } = await sb.from("ai_settings")
+      .insert({ ...fields, user_id: context.userId, campaign_id: campaignId });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+// Removes a campaign's AI override so it inherits the global workspace settings.
+export const clearCampaignAiOverride = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ campaign_id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase.from("ai_settings")
+      .delete().eq("user_id", context.userId).eq("campaign_id", data.campaign_id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });

@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useScopedCampaignId } from "@/components/campaign-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getAllSettings, updateAiSettings } from "@/lib/settings.functions";
@@ -49,10 +50,11 @@ function AiSettings() {
   const discover = useServerFn(discoverGeminiModels);
 
   const qc = useQueryClient();
+  const campaignId = useScopedCampaignId();
 
-  const { data } = useQuery({ queryKey: ["settings"], queryFn: () => get() });
+  const { data } = useQuery({ queryKey: ["settings", campaignId], queryFn: () => get({ data: { campaign_id: campaignId } }) });
   const { data: catalog } = useQuery({ queryKey: ["ai-catalog"], queryFn: () => getCatalog() });
-  const { data: resolved } = useQuery({ queryKey: ["ai-resolved"], queryFn: () => getResolved() });
+  const { data: resolved } = useQuery({ queryKey: ["ai-resolved", campaignId], queryFn: () => getResolved({ data: { campaign_id: campaignId } }) });
 
   const [state, setState] = useState<any>(null);
   useEffect(() => { if (data?.ai) setState(data.ai); }, [data]);
@@ -64,6 +66,7 @@ function AiSettings() {
       default_hashtags: state.default_hashtags ?? [], max_caption_length: state.max_caption_length,
       temperature: Number(state.temperature), model: state.model,
       user_instructions: state.user_instructions ?? null,
+      campaign_id: campaignId,
     } }),
     onSuccess: () => { toast.success("Saved"); qc.invalidateQueries({ queryKey: ["settings"] }); },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
@@ -75,7 +78,11 @@ function AiSettings() {
     <div className="space-y-6 max-w-3xl">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">AI Objective & Providers</h1>
-        <p className="text-sm text-muted-foreground">Configure the goal, voice, and AI providers Loop uses.</p>
+        <p className="text-sm text-muted-foreground">
+          {campaignId
+            ? "Campaign override — saving here creates AI settings just for the selected campaign. Switch to Global Mode to edit the shared workspace defaults."
+            : "Global workspace defaults — used by every campaign without its own override."}
+        </p>
       </div>
 
       <Tabs defaultValue="objective">
@@ -137,7 +144,7 @@ function AiSettings() {
               catalog={catalog}
               initial={resolved}
               onSave={async (payload) => {
-                await updProviders({ data: payload });
+                await updProviders({ data: { ...payload, campaign_id: campaignId } });
                 toast.success("Providers saved");
                 qc.invalidateQueries({ queryKey: ["ai-resolved"] });
               }}

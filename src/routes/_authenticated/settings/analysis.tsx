@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useScopedCampaignId } from "@/components/campaign-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getAllSettings, updateAnalysisSettings } from "@/lib/settings.functions";
@@ -27,7 +28,8 @@ function AnalysisSettings() {
   const get = useServerFn(getAllSettings);
   const upd = useServerFn(updateAnalysisSettings);
   const qc = useQueryClient();
-  const { data } = useQuery({ queryKey: ["settings"], queryFn: () => get() });
+  const campaignId = useScopedCampaignId();
+  const { data } = useQuery({ queryKey: ["settings", campaignId], queryFn: () => get({ data: { campaign_id: campaignId } }) });
 
   const [state, setState] = useState<any>(null);
   useEffect(() => { if (data?.analysis) setState(data.analysis); }, [data]);

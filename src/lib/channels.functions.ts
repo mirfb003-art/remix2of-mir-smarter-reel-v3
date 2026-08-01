@@ -2,15 +2,19 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
-export const listChannels = createServerFn({ method: "GET" })
+export const listChannels = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
+  .inputValidator((d: unknown) => z.object({ campaign_id: z.string().uuid().nullable().optional() }).optional().parse(d))
+  .handler(async ({ data, context }) => {
+    let q = context.supabase
       .from("channels")
-      .select("id,name,platform,buffer_channel_id,active,credential_id")
+      .select("id,name,platform,buffer_channel_id,active,credential_id,campaign_id")
       .order("created_at", { ascending: false });
+    // Campaign mode shows campaign-owned channels plus unassigned (shared) ones.
+    if (data?.campaign_id) q = q.or(`campaign_id.eq.${data.campaign_id},campaign_id.is.null`);
+    const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
-    return data ?? [];
+    return rows ?? [];
   });
 
 const saveSchema = z.object({

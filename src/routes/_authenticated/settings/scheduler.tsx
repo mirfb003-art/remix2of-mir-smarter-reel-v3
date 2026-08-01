@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listSchedules, upsertSchedule, deleteSchedule, setSchedulePaused } from "@/lib/schedule.functions";
 import { listChannels } from "@/lib/channels.functions";
-import { useActiveCampaignId } from "@/lib/active-campaign";
+import { useScopedCampaignId } from "@/components/campaign-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,10 +25,10 @@ function SchedulerSettings() {
   const pauseFn = useServerFn(setSchedulePaused);
   const chansFn = useServerFn(listChannels);
   const qc = useQueryClient();
-  const campaignId = useActiveCampaignId();
+  const campaignId = useScopedCampaignId();
 
-  const { data } = useQuery({ queryKey: ["schedules"], queryFn: () => list() });
-  const { data: chans } = useQuery({ queryKey: ["channels"], queryFn: () => chansFn() });
+  const { data } = useQuery({ queryKey: ["schedules", campaignId], queryFn: () => list({ data: { campaign_id: campaignId } }) });
+  const { data: chans } = useQuery({ queryKey: ["channels", campaignId], queryFn: () => chansFn({ data: { campaign_id: campaignId } }) });
 
   const [channelId, setChannelId] = useState<string>("");
   const [mode, setMode] = useState<"interval"|"daily_times"|"manual">("interval");

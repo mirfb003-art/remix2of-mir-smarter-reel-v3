@@ -253,3 +253,31 @@ export async function healthCheckProvider(cfg: ProviderConfig): Promise<{ ok: bo
     return { ok: false, latencyMs: Date.now() - t0, error: err instanceof Error ? err.message : String(err) };
   }
 }
+
+/**
+ * Campaign-aware AI key resolution.
+ * Order: campaign-specific ai_settings row → global (campaign_id IS NULL) row →
+ * any row for the user → Lovable gateway defaults.
+ */
+export async function resolveCampaignAISettings(
+  sb: any,
+  userId: string,
+  campaignId: string | null | undefined,
+): Promise<AISettingsSchema> {
+  let row: any = null;
+  if (campaignId) {
+    const { data } = await sb.from("ai_settings").select("*")
+      .eq("user_id", userId).eq("campaign_id", campaignId).maybeSingle();
+    row = data ?? null;
+  }
+  if (!row) {
+    const { data } = await sb.from("ai_settings").select("*")
+      .eq("user_id", userId).is("campaign_id", null).maybeSingle();
+    row = data ?? null;
+  }
+  if (!row) {
+    const { data } = await sb.from("ai_settings").select("*").eq("user_id", userId).maybeSingle();
+    row = data ?? null;
+  }
+  return resolveAISettings(row);
+}
