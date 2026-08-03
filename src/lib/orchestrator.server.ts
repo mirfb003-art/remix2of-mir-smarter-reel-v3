@@ -212,7 +212,13 @@ ${(prevCaps ?? []).map((c) => `- ${c.text}`).join("\n") || "(none)"}
 CURRENT VIDEO UNDERSTANDING:
 ${JSON.stringify(videoSummary)}
 
-Return JSON: { "caption", "hook", "cta", "hashtags": [...], "style_tags": [...] }. The caption's hook, length, cta, emojis, and hashtag count MUST match the STRATEGY.`;
+Return JSON: { "caption", "hook", "cta", "hashtags": [...], "style_tags": [...] }. The caption's hook, length, cta, emojis, and hashtag count MUST match the STRATEGY.
+
+HASHTAG RULES (STRICT):
+- Always return exactly ${strategy?.hashtag_count ?? 5} hashtags in "hashtags" (never an empty list unless the strategy says 0).
+- Each hashtag MUST start with "#", be a single word (no spaces, no punctuation), e.g. "#fitnessmotivation".
+- Hashtags MUST be specific and relevant to the video's topic, objects, scene and audience — mix 1-2 broad reach tags with specific niche tags. No generic filler like "#viral #fyp" only.
+- The "caption" text MUST end with the hashtags, space-separated, on their own final line.`;
 
   const result = await withRetry("ai",
     async () => executeAIRequest(aiSettings, (model) => generateText({
@@ -234,15 +240,56 @@ Return JSON: { "caption", "hook", "cta", "hashtags": [...], "style_tags": [...] 
   try { out = JSON.parse(captionText.replace(/^```json\s*/i,"").replace(/```$/,"").trim()); }
   catch { out = { caption: captionText.slice(0, ai?.max_caption_length ?? 2200) }; }
 
+  // ---- Normalize hashtags: "#" prefix, single word, unique, non-empty ----
+  const wanted = strategy?.hashtag_count ?? 5;
+  const normalize = (tags: unknown): string[] => {
+    const arr = Array.isArray(tags) ? tags : typeof tags === "string" ? String(tags).split(/[\s,]+/) : [];
+    const seen = new Set<string>();
+    const outTags: string[] = [];
+    for (const raw of arr) {
+      const cleaned = String(raw ?? "")
+        .replace(/[#\s]+/g, " ").trim()
+        .replace(/[^\p{L}\p{N}\s_]/gu, "")
+        .split(/\s+/).join("");
+      if (!cleaned) continue;
+      const tag = `#${cleaned}`;
+      const key = tag.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      outTags.push(tag);
+    }
+    return outTags;
+  };
+
+  let hashtags = normalize(out.hashtags);
+  // Pull any hashtags already written inside the caption text.
+  const inCaption = normalize(String(out.caption ?? "").match(/#[\p{L}\p{N}_]+/gu) ?? []);
+  for (const t of inCaption) if (!hashtags.some((h) => h.toLowerCase() === t.toLowerCase())) hashtags.push(t);
+  // Top up from configured defaults if the model returned too few.
+  if (wanted > 0 && hashtags.length < wanted) {
+    for (const t of normalize(ai?.default_hashtags ?? [])) {
+      if (hashtags.length >= wanted) break;
+      if (!hashtags.some((h) => h.toLowerCase() === t.toLowerCase())) hashtags.push(t);
+    }
+  }
+  if (wanted > 0) hashtags = hashtags.slice(0, Math.max(wanted, Math.min(hashtags.length, 10)));
+
+  // Ensure the caption body ends with the hashtag block exactly once.
+  let body = String(out.caption ?? "").replace(/#[\p{L}\p{N}_]+/gu, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  if (hashtags.length) body = `${body}\n\n${hashtags.join(" ")}`.trim();
+  out.caption = body;
+  out.hashtags = hashtags;
+
   await sb.from("captions").insert({
     run_id: runId, user_id: userId,
     text: String(out.caption ?? ""),
     hook: out.hook ?? null,
     cta: out.cta ?? null,
-    hashtags: out.hashtags ?? [],
+    hashtags,
     length: String(out.caption ?? "").length,
     style_tags: out.style_tags ?? [],
   });
+
   return out;
 }
 
@@ -368,11 +415,22 @@ export async function runOrchestrator({
     .select("*, channels(*, buffer_credentials(*))")
     .eq("user_id", userId).eq("idempotency_key", idemKey)
     .maybeSingle();
+  const STALE_MS = 10 * 60 * 1000;
   if (existingRun && existingRun.status !== "failed" && existingRun.status !== "stale") {
     if (existingRun.status === "complete") return { runId: existingRun.id, alreadyComplete: true };
-    // In-flight — refuse to double-publish.
-    throw new Error(`Run ${existingRun.id} already in-flight for this queue item (${existingRun.status})`);
+    const hb = existingRun.heartbeat_at ? new Date(existingRun.heartbeat_at).getTime() : 0;
+    const isStuck = Date.now() - hb > STALE_MS;
+    if (!isStuck) {
+      // Genuinely in-flight — refuse to double-publish.
+      throw new Error(`Run ${existingRun.id} already in-flight for this queue item (${existingRun.status})`);
+    }
+    // Stuck run: release its lock and take it over (resumes from step_state).
+    if (existingRun.channel_id) {
+      await sb.rpc("release_channel_lock", { _channel_id: existingRun.channel_id, _run_id: existingRun.id });
+    }
+    await audit(sb, { userId, runId: existingRun.id, eventType: "run.takeover", module: "orchestrator", status: "info", error: `stale ${existingRun.status}` });
   }
+
 
   // ----- Get channel + credentials -----
   const { data: channel } = await sb.from("channels")
@@ -408,13 +466,30 @@ export async function runOrchestrator({
   }
 
 
-  // ----- Acquire channel lock -----
-  const gotLock = await acquireChannelLock(sb, channelId, runId);
+  // ----- Acquire channel lock (reclaim it when the holder is dead) -----
+  let gotLock = await acquireChannelLock(sb, channelId, runId);
+  if (!gotLock) {
+    const { data: chLock } = await sb.from("channels").select("active_run_id").eq("id", channelId).maybeSingle();
+    const holderId = chLock?.active_run_id ?? null;
+    let reclaimable = !holderId || holderId === runId;
+    if (holderId && holderId !== runId) {
+      const { data: holder } = await sb.from("runs").select("status,heartbeat_at").eq("id", holderId).maybeSingle();
+      const hb = holder?.heartbeat_at ? new Date(holder.heartbeat_at).getTime() : 0;
+      reclaimable = !holder
+        || ["complete", "failed", "stale"].includes(holder.status ?? "")
+        || Date.now() - hb > 10 * 60 * 1000;
+    }
+    if (reclaimable && holderId) {
+      await sb.rpc("release_channel_lock", { _channel_id: channelId, _run_id: holderId });
+    }
+    gotLock = reclaimable ? await acquireChannelLock(sb, channelId, runId) : false;
+  }
   if (!gotLock) {
     await sb.from("runs").update({ status: "failed", error: "Channel locked by another in-flight run", finished_at: new Date().toISOString() }).eq("id", runId);
     await audit(sb, { userId, runId, eventType: "lock.denied", module: "orchestrator", status: "error" });
     throw new Error("Channel is already being processed by another run.");
   }
+
   await audit(sb, { userId, runId, eventType: "lock.acquired", module: "orchestrator", status: "success", payload: { channel_id: channelId } });
 
   // ----- Mark queue item processing (increment attempts) -----
