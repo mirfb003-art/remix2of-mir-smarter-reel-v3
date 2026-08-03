@@ -212,7 +212,13 @@ ${(prevCaps ?? []).map((c) => `- ${c.text}`).join("\n") || "(none)"}
 CURRENT VIDEO UNDERSTANDING:
 ${JSON.stringify(videoSummary)}
 
-Return JSON: { "caption", "hook", "cta", "hashtags": [...], "style_tags": [...] }. The caption's hook, length, cta, emojis, and hashtag count MUST match the STRATEGY.`;
+Return JSON: { "caption", "hook", "cta", "hashtags": [...], "style_tags": [...] }. The caption's hook, length, cta, emojis, and hashtag count MUST match the STRATEGY.
+
+HASHTAG RULES (STRICT):
+- Always return exactly ${strategy?.hashtag_count ?? 5} hashtags in "hashtags" (never an empty list unless the strategy says 0).
+- Each hashtag MUST start with "#", be a single word (no spaces, no punctuation), e.g. "#fitnessmotivation".
+- Hashtags MUST be specific and relevant to the video's topic, objects, scene and audience — mix 1-2 broad reach tags with specific niche tags. No generic filler like "#viral #fyp" only.
+- The "caption" text MUST end with the hashtags, space-separated, on their own final line.`;
 
   const result = await withRetry("ai",
     async () => executeAIRequest(aiSettings, (model) => generateText({
@@ -234,15 +240,56 @@ Return JSON: { "caption", "hook", "cta", "hashtags": [...], "style_tags": [...] 
   try { out = JSON.parse(captionText.replace(/^```json\s*/i,"").replace(/```$/,"").trim()); }
   catch { out = { caption: captionText.slice(0, ai?.max_caption_length ?? 2200) }; }
 
+  // ---- Normalize hashtags: "#" prefix, single word, unique, non-empty ----
+  const wanted = strategy?.hashtag_count ?? 5;
+  const normalize = (tags: unknown): string[] => {
+    const arr = Array.isArray(tags) ? tags : typeof tags === "string" ? String(tags).split(/[\s,]+/) : [];
+    const seen = new Set<string>();
+    const outTags: string[] = [];
+    for (const raw of arr) {
+      const cleaned = String(raw ?? "")
+        .replace(/[#\s]+/g, " ").trim()
+        .replace(/[^\p{L}\p{N}\s_]/gu, "")
+        .split(/\s+/).join("");
+      if (!cleaned) continue;
+      const tag = `#${cleaned}`;
+      const key = tag.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      outTags.push(tag);
+    }
+    return outTags;
+  };
+
+  let hashtags = normalize(out.hashtags);
+  // Pull any hashtags already written inside the caption text.
+  const inCaption = normalize(String(out.caption ?? "").match(/#[\p{L}\p{N}_]+/gu) ?? []);
+  for (const t of inCaption) if (!hashtags.some((h) => h.toLowerCase() === t.toLowerCase())) hashtags.push(t);
+  // Top up from configured defaults if the model returned too few.
+  if (wanted > 0 && hashtags.length < wanted) {
+    for (const t of normalize(ai?.default_hashtags ?? [])) {
+      if (hashtags.length >= wanted) break;
+      if (!hashtags.some((h) => h.toLowerCase() === t.toLowerCase())) hashtags.push(t);
+    }
+  }
+  if (wanted > 0) hashtags = hashtags.slice(0, Math.max(wanted, Math.min(hashtags.length, 10)));
+
+  // Ensure the caption body ends with the hashtag block exactly once.
+  let body = String(out.caption ?? "").replace(/#[\p{L}\p{N}_]+/gu, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  if (hashtags.length) body = `${body}\n\n${hashtags.join(" ")}`.trim();
+  out.caption = body;
+  out.hashtags = hashtags;
+
   await sb.from("captions").insert({
     run_id: runId, user_id: userId,
     text: String(out.caption ?? ""),
     hook: out.hook ?? null,
     cta: out.cta ?? null,
-    hashtags: out.hashtags ?? [],
+    hashtags,
     length: String(out.caption ?? "").length,
     style_tags: out.style_tags ?? [],
   });
+
   return out;
 }
 
