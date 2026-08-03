@@ -419,13 +419,30 @@ export async function runOrchestrator({
   }
 
 
-  // ----- Acquire channel lock -----
-  const gotLock = await acquireChannelLock(sb, channelId, runId);
+  // ----- Acquire channel lock (reclaim it when the holder is dead) -----
+  let gotLock = await acquireChannelLock(sb, channelId, runId);
+  if (!gotLock) {
+    const { data: chLock } = await sb.from("channels").select("active_run_id").eq("id", channelId).maybeSingle();
+    const holderId = chLock?.active_run_id ?? null;
+    let reclaimable = !holderId || holderId === runId;
+    if (holderId && holderId !== runId) {
+      const { data: holder } = await sb.from("runs").select("status,heartbeat_at").eq("id", holderId).maybeSingle();
+      const hb = holder?.heartbeat_at ? new Date(holder.heartbeat_at).getTime() : 0;
+      reclaimable = !holder
+        || ["complete", "failed", "stale"].includes(holder.status ?? "")
+        || Date.now() - hb > 10 * 60 * 1000;
+    }
+    if (reclaimable && holderId) {
+      await sb.rpc("release_channel_lock", { _channel_id: channelId, _run_id: holderId });
+    }
+    gotLock = reclaimable ? await acquireChannelLock(sb, channelId, runId) : false;
+  }
   if (!gotLock) {
     await sb.from("runs").update({ status: "failed", error: "Channel locked by another in-flight run", finished_at: new Date().toISOString() }).eq("id", runId);
     await audit(sb, { userId, runId, eventType: "lock.denied", module: "orchestrator", status: "error" });
     throw new Error("Channel is already being processed by another run.");
   }
+
   await audit(sb, { userId, runId, eventType: "lock.acquired", module: "orchestrator", status: "success", payload: { channel_id: channelId } });
 
   // ----- Mark queue item processing (increment attempts) -----
