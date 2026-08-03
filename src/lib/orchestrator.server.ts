@@ -368,11 +368,22 @@ export async function runOrchestrator({
     .select("*, channels(*, buffer_credentials(*))")
     .eq("user_id", userId).eq("idempotency_key", idemKey)
     .maybeSingle();
+  const STALE_MS = 10 * 60 * 1000;
   if (existingRun && existingRun.status !== "failed" && existingRun.status !== "stale") {
     if (existingRun.status === "complete") return { runId: existingRun.id, alreadyComplete: true };
-    // In-flight — refuse to double-publish.
-    throw new Error(`Run ${existingRun.id} already in-flight for this queue item (${existingRun.status})`);
+    const hb = existingRun.heartbeat_at ? new Date(existingRun.heartbeat_at).getTime() : 0;
+    const isStuck = Date.now() - hb > STALE_MS;
+    if (!isStuck) {
+      // Genuinely in-flight — refuse to double-publish.
+      throw new Error(`Run ${existingRun.id} already in-flight for this queue item (${existingRun.status})`);
+    }
+    // Stuck run: release its lock and take it over (resumes from step_state).
+    if (existingRun.channel_id) {
+      await sb.rpc("release_channel_lock", { _channel_id: existingRun.channel_id, _run_id: existingRun.id });
+    }
+    await audit(sb, { userId, runId: existingRun.id, eventType: "run.takeover", module: "orchestrator", status: "info", error: `stale ${existingRun.status}` });
   }
+
 
   // ----- Get channel + credentials -----
   const { data: channel } = await sb.from("channels")
