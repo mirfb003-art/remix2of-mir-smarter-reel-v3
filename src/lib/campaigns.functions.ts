@@ -94,70 +94,29 @@ export const deleteCampaign = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
+    const { purgeCampaignEverything } = await import("./campaign-maintenance.server");
+    await purgeCampaignEverything(context.supabase, data.id);
     const { error } = await context.supabase.from("campaigns").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
 
-// --- Per-campaign maintenance: reset / clear data, keeping the campaign itself ---
-const resetSchema = z.object({
-  id: z.string().uuid(),
-  clear_queue: z.boolean().default(true),
-  clear_runs: z.boolean().default(true),
-  clear_memory: z.boolean().default(false),
-});
-
+// Reset a single campaign's room without touching any other campaign.
 export const resetCampaign = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => resetSchema.parse(d))
+  .inputValidator((d: unknown) => z.object({
+    id: z.string().uuid(),
+    clear_queue: z.boolean().optional(),
+    clear_runs: z.boolean().optional(),
+    clear_memory: z.boolean().optional(),
+  }).parse(d))
   .handler(async ({ data, context }) => {
-    const sb = context.supabase;
-    const camp = data.id;
-
-    if (data.clear_runs) {
-      const { data: runs } = await sb.from("runs").select("id").eq("campaign_id", camp);
-      const runIds = (runs ?? []).map((r) => r.id);
-      if (runIds.length) {
-        const { data: posts } = await sb.from("published_posts").select("id").in("run_id", runIds);
-        const postIds = (posts ?? []).map((p) => p.id);
-        if (postIds.length) await sb.from("post_analytics").delete().in("published_post_id", postIds);
-        await sb.from("published_posts").delete().in("run_id", runIds);
-        await sb.from("captions").delete().in("run_id", runIds);
-        await sb.from("video_analyses").delete().in("run_id", runIds);
-        await sb.from("learning_reports").delete().in("run_id", runIds);
-        await sb.from("predictions").delete().in("run_id", runIds);
-        await sb.from("strategies").delete().in("run_id", runIds);
-        await sb.from("runs").update({ prediction_id: null, strategy_id: null }).in("id", runIds);
-        const { error } = await sb.from("runs").delete().in("id", runIds);
-        if (error) throw new Error(error.message);
-      }
-    }
-
-    if (data.clear_queue) {
-      const { error } = await sb.from("video_queue").delete().eq("campaign_id", camp);
-      if (error) throw new Error(error.message);
-    } else {
-      // Keep the videos but send everything back to pending, renumbered from 1.
-      await sb.from("video_queue").update({
-        status: "pending", error: null, attempts: 0, processed_at: null,
-        dead_letter_at: null, last_error_module: null,
-      }).eq("campaign_id", camp);
-      const { data: items } = await sb.from("video_queue")
-        .select("id,position").eq("campaign_id", camp).order("position", { ascending: true });
-      let i = 1;
-      for (const it of items ?? []) {
-        if (it.position !== i) await sb.from("video_queue").update({ position: i }).eq("id", it.id);
-        i++;
-      }
-    }
-
-    if (data.clear_memory) {
-      await sb.from("memory_insights").delete().eq("campaign_id", camp);
-      await sb.from("insight_trends").delete().eq("campaign_id", camp);
-    }
-
-    // Release any lingering channel locks for this campaign.
-    await sb.from("channels").update({ active_run_id: null, lock_expires_at: null }).eq("campaign_id", camp);
-
+    const { resetCampaignData } = await import("./campaign-maintenance.server");
+    await resetCampaignData(context.supabase, data.id, {
+      clearQueue: data.clear_queue ?? false,
+      clearRuns: data.clear_runs ?? true,
+      clearMemory: data.clear_memory ?? false,
+    });
     return { ok: true };
   });
+
