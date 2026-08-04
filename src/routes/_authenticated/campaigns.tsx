@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Play, Pause, Square, Trash2, Plus, CircleCheck } from "lucide-react";
+import { Play, Pause, Square, Trash2, Plus, CircleCheck, RotateCcw, RefreshCw, Eraser } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/campaigns")({ component: CampaignsPage });
 
