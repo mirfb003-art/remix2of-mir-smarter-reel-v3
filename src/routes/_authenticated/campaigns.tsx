@@ -36,6 +36,7 @@ function CampaignsPage() {
   const upsert = useServerFn(upsertCampaign);
   const setStatus = useServerFn(setCampaignStatus);
   const del = useServerFn(deleteCampaign);
+  const reset = useServerFn(resetCampaign);
   const updatePublishing = useServerFn(updateCampaignPublishing);
   const qc = useQueryClient();
   const activeId = useActiveCampaignId();
