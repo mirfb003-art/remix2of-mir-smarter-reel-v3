@@ -119,11 +119,16 @@ export const moveQueueItem = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid(), direction: z.enum(["up", "down"]) }).parse(d))
   .handler(async ({ data, context }) => {
-    const { data: items, error } = await context.supabase
+    // Reordering stays inside the item's own campaign.
+    const { data: self } = await context.supabase
+      .from("video_queue").select("campaign_id").eq("id", data.id).maybeSingle();
+    let listQ = context.supabase
       .from("video_queue")
       .select("id,position,status")
       .eq("user_id", context.userId)
       .order("position", { ascending: true });
+    listQ = self?.campaign_id ? listQ.eq("campaign_id", self.campaign_id) : listQ.is("campaign_id", null);
+    const { data: items, error } = await listQ;
     if (error) throw new Error(error.message);
     const list = items ?? [];
     const idx = list.findIndex((r) => r.id === data.id);
