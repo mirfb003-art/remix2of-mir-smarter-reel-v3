@@ -43,12 +43,15 @@ export const addToQueue = createServerFn({ method: "POST" })
     }
     if (!fresh.length) return { added: 0, skipped: data.urls.length };
 
-    const { data: maxRow } = await context.supabase
+    // Positions are per-campaign — each campaign's queue numbers start at 1.
+    let maxQ = context.supabase
       .from("video_queue")
       .select("position")
+      .eq("user_id", context.userId)
       .order("position", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
+    maxQ = data.campaign_id ? maxQ.eq("campaign_id", data.campaign_id) : maxQ.is("campaign_id", null);
+    const { data: maxRow } = await maxQ.maybeSingle();
     const start = (maxRow?.position ?? 0) + 1;
     const rows = fresh.map((u, i) => ({
       user_id: context.userId,
@@ -116,11 +119,16 @@ export const moveQueueItem = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid(), direction: z.enum(["up", "down"]) }).parse(d))
   .handler(async ({ data, context }) => {
-    const { data: items, error } = await context.supabase
+    // Reordering stays inside the item's own campaign.
+    const { data: self } = await context.supabase
+      .from("video_queue").select("campaign_id").eq("id", data.id).maybeSingle();
+    let listQ = context.supabase
       .from("video_queue")
       .select("id,position,status")
       .eq("user_id", context.userId)
       .order("position", { ascending: true });
+    listQ = self?.campaign_id ? listQ.eq("campaign_id", self.campaign_id) : listQ.is("campaign_id", null);
+    const { data: items, error } = await listQ;
     if (error) throw new Error(error.message);
     const list = items ?? [];
     const idx = list.findIndex((r) => r.id === data.id);

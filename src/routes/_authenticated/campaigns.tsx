@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { listCampaigns, upsertCampaign, setCampaignStatus, deleteCampaign, updateCampaignPublishing } from "@/lib/campaigns.functions";
+import { listCampaigns, upsertCampaign, setCampaignStatus, deleteCampaign, updateCampaignPublishing, resetCampaign } from "@/lib/campaigns.functions";
 import { PublishModeFields, PUBLISH_MODES, isoToLocalInput, localInputToIso, type PublishMode } from "@/components/publish-mode-fields";
 import { setActiveCampaignId, useActiveCampaignId } from "@/lib/active-campaign";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Play, Pause, Square, Trash2, Plus, CircleCheck } from "lucide-react";
+import { Play, Pause, Square, Trash2, Plus, CircleCheck, RotateCcw, RefreshCw, Eraser } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/campaigns")({ component: CampaignsPage });
 
@@ -36,6 +36,7 @@ function CampaignsPage() {
   const upsert = useServerFn(upsertCampaign);
   const setStatus = useServerFn(setCampaignStatus);
   const del = useServerFn(deleteCampaign);
+  const reset = useServerFn(resetCampaign);
   const updatePublishing = useServerFn(updateCampaignPublishing);
   const qc = useQueryClient();
   const activeId = useActiveCampaignId();
@@ -83,6 +84,12 @@ function CampaignsPage() {
   const delMut = useMutation({
     mutationFn: (id: string) => del({ data: { id } }),
     onSuccess: () => { toast.success("Deleted"); qc.invalidateQueries(); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+  const resetMut = useMutation({
+    mutationFn: (p: { id: string; clear_queue?: boolean; clear_runs?: boolean; clear_memory?: boolean }) => reset({ data: p }),
+    onSuccess: () => { toast.success("Campaign reset"); qc.invalidateQueries(); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
   return (
@@ -139,9 +146,14 @@ function CampaignsPage() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>All campaigns ({campaigns?.length ?? 0})</CardTitle>
-          <CardDescription>The active campaign at top-left scopes queue, sheet, dashboard and manual runs.</CardDescription>
+        <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
+          <div className="space-y-1.5">
+            <CardTitle>All campaigns ({campaigns?.length ?? 0})</CardTitle>
+            <CardDescription>Each campaign is its own room — queue, run numbers, schedule, memory and sheet are isolated. The active campaign at top-left scopes every page.</CardDescription>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => { qc.invalidateQueries(); toast.success("Refreshed"); }}>
+            <RefreshCw className="h-4 w-4 mr-1"/>Refresh
+          </Button>
         </CardHeader>
         <CardContent>
           {!campaigns?.length ? (
@@ -210,6 +222,22 @@ function CampaignsPage() {
                         <Square className="h-4 w-4 text-destructive"/>
                       </Button>
                     )}
+                    <Button size="icon" variant="ghost" title="Reset runs & requeue videos (starts numbering at 1)"
+                      disabled={resetMut.isPending}
+                      onClick={() => {
+                        if (confirm(`Reset "${c.name}"? Its run history is deleted and its videos go back to pending — numbering restarts at 1. Other campaigns are untouched.`))
+                          resetMut.mutate({ id: c.id, clear_runs: true, clear_queue: false });
+                      }}>
+                      <RotateCcw className="h-4 w-4"/>
+                    </Button>
+                    <Button size="icon" variant="ghost" title="Wipe everything in this campaign (queue + runs + memory)"
+                      disabled={resetMut.isPending}
+                      onClick={() => {
+                        if (confirm(`Wipe ALL data in "${c.name}" — queue, runs and learned memory? The campaign itself stays.`))
+                          resetMut.mutate({ id: c.id, clear_runs: true, clear_queue: true, clear_memory: true });
+                      }}>
+                      <Eraser className="h-4 w-4 text-warning"/>
+                    </Button>
                     <Button size="icon" variant="ghost" title="Delete" onClick={() => {
                       if (confirm(`Delete campaign "${c.name}"? All queue/runs/memory scoped to it will be removed.`)) delMut.mutate(c.id);
                     }}>
