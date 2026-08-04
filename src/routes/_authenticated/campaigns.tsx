@@ -84,6 +84,12 @@ function CampaignsPage() {
   const delMut = useMutation({
     mutationFn: (id: string) => del({ data: { id } }),
     onSuccess: () => { toast.success("Deleted"); qc.invalidateQueries(); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+  const resetMut = useMutation({
+    mutationFn: (p: { id: string; clear_queue?: boolean; clear_runs?: boolean; clear_memory?: boolean }) => reset({ data: p }),
+    onSuccess: () => { toast.success("Campaign reset"); qc.invalidateQueries(); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
   return (
