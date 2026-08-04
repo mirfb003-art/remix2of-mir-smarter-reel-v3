@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { listCampaigns, upsertCampaign, setCampaignStatus, deleteCampaign, updateCampaignPublishing } from "@/lib/campaigns.functions";
+import { listCampaigns, upsertCampaign, setCampaignStatus, deleteCampaign, updateCampaignPublishing, resetCampaign } from "@/lib/campaigns.functions";
 import { PublishModeFields, PUBLISH_MODES, isoToLocalInput, localInputToIso, type PublishMode } from "@/components/publish-mode-fields";
 import { setActiveCampaignId, useActiveCampaignId } from "@/lib/active-campaign";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
