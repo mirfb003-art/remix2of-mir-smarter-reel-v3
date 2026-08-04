@@ -447,7 +447,11 @@ export async function runOrchestrator({
       heartbeat_at: new Date().toISOString(),
     }).eq("id", runId);
   } else {
-    const { data: lastRun } = await sb.from("runs").select("run_number").eq("user_id", userId).order("run_number", { ascending: false }).limit(1).maybeSingle();
+    // Run numbers are per-campaign — every campaign counts from 1 independently.
+    let lastRunQ = sb.from("runs").select("run_number").eq("user_id", userId)
+      .order("run_number", { ascending: false }).limit(1);
+    lastRunQ = campaignId ? lastRunQ.eq("campaign_id", campaignId) : lastRunQ.is("campaign_id", null);
+    const { data: lastRun } = await lastRunQ.maybeSingle();
     const nextNum = (lastRun?.run_number ?? 0) + 1;
     const promptVer = await getActivePromptVersion(sb, userId);
     const { data: run, error: runErr } = await sb.from("runs").insert({
