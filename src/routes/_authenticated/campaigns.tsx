@@ -146,9 +146,14 @@ function CampaignsPage() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>All campaigns ({campaigns?.length ?? 0})</CardTitle>
-          <CardDescription>The active campaign at top-left scopes queue, sheet, dashboard and manual runs.</CardDescription>
+        <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
+          <div className="space-y-1.5">
+            <CardTitle>All campaigns ({campaigns?.length ?? 0})</CardTitle>
+            <CardDescription>Each campaign is its own room — queue, run numbers, schedule, memory and sheet are isolated. The active campaign at top-left scopes every page.</CardDescription>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => { qc.invalidateQueries(); toast.success("Refreshed"); }}>
+            <RefreshCw className="h-4 w-4 mr-1"/>Refresh
+          </Button>
         </CardHeader>
         <CardContent>
           {!campaigns?.length ? (
