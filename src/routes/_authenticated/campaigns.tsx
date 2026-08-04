@@ -217,6 +217,22 @@ function CampaignsPage() {
                         <Square className="h-4 w-4 text-destructive"/>
                       </Button>
                     )}
+                    <Button size="icon" variant="ghost" title="Reset runs & requeue videos (starts numbering at 1)"
+                      disabled={resetMut.isPending}
+                      onClick={() => {
+                        if (confirm(`Reset "${c.name}"? Its run history is deleted and its videos go back to pending — numbering restarts at 1. Other campaigns are untouched.`))
+                          resetMut.mutate({ id: c.id, clear_runs: true, clear_queue: false });
+                      }}>
+                      <RotateCcw className="h-4 w-4"/>
+                    </Button>
+                    <Button size="icon" variant="ghost" title="Wipe everything in this campaign (queue + runs + memory)"
+                      disabled={resetMut.isPending}
+                      onClick={() => {
+                        if (confirm(`Wipe ALL data in "${c.name}" — queue, runs and learned memory? The campaign itself stays.`))
+                          resetMut.mutate({ id: c.id, clear_runs: true, clear_queue: true, clear_memory: true });
+                      }}>
+                      <Eraser className="h-4 w-4 text-warning"/>
+                    </Button>
                     <Button size="icon" variant="ghost" title="Delete" onClick={() => {
                       if (confirm(`Delete campaign "${c.name}"? All queue/runs/memory scoped to it will be removed.`)) delMut.mutate(c.id);
                     }}>
