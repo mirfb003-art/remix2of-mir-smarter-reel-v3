@@ -686,7 +686,7 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
     if (!state.generate_caption?.done) {
       await sb.from("runs").update({ status: "generating" }).eq("id", runId);
       await refreshHeartbeat(sb, runId, channelId);
-      const caption = await stepGenerateCaption(sb, userId, runId, aiSettings, state.analyze_video!.summary, promptVer.caption_prompt, state.strategy?.decision ?? null);
+      const caption = await stepGenerateCaption(sb, userId, runId, aiSettings, state.analyze_video!.summary, promptVer.caption_prompt, state.strategy?.decision ?? null, scopeCampaignId, campaignId);
       state.generate_caption = { done: true, caption };
       await persistStepState(sb, runId, state, "publish");
     }
