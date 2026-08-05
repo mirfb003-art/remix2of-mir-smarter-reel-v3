@@ -604,14 +604,27 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
   try {
     await log(sb, userId, runId, "info", "orchestrator", `Run started/resumed at step ${run.current_step ?? "analyze_previous"}`);
 
+    // Step: refresh this campaign's post analytics so the Sheet + learning use live numbers.
+    try {
+      const { refreshChannelAnalytics } = await import("./analytics-sync.server");
+      const res = await refreshChannelAnalytics(sb, { userId, channelId, campaignId });
+      await audit(sb, { userId, runId, eventType: "analytics.refreshed", module: "orchestrator", status: "success", payload: res });
+    } catch (e) {
+      await log(sb, userId, runId, "warn", "orchestrator", `Analytics refresh skipped: ${e instanceof Error ? e.message : String(e)}`);
+    }
+
     // Step: analyze previous
     if (!state.analyze_previous?.done) {
       await persistStepState(sb, runId, state, "analyze_previous");
       await refreshHeartbeat(sb, runId, channelId);
-      const report = await stepAnalyzePrevious(sb, userId, runId, aiSettings, promptVer.learning_prompt);
+      const { data: aSet } = await sb.from("analysis_settings").select("n_value").eq("user_id", userId).maybeSingle();
+      const report = await stepAnalyzePrevious(
+        sb, userId, runId, aiSettings, promptVer.learning_prompt, scopeCampaignId, aSet?.n_value ?? 5,
+      );
       state.analyze_previous = { done: true, report };
       await persistStepState(sb, runId, state, "analyze_video");
     }
+
 
     // Step: analyze video
     if (!state.analyze_video?.done) {
