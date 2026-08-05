@@ -228,17 +228,27 @@ async function stepAnalyzeVideo(sb: Sb, userId: string, runId: string, url: stri
 
 async function stepGenerateCaption(
   sb: Sb, userId: string, runId: string, aiSettings: AISettingsSchema, videoSummary: any, captionPrompt: string,
-  strategy: StrategyDecision | null,
+  strategy: StrategyDecision | null, scopeCampaignId: string | null = null, campaignId: string | null = null,
 ) {
+  const memQ = sb.from("memory_insights").select("category,insight,confidence").eq("user_id", userId).eq("active", true).order("confidence", { ascending: false }).limit(15);
   const [aiRes, analysisRes, memoryRes] = await Promise.all([
-    sb.from("ai_settings").select("*").eq("user_id", userId).maybeSingle(),
+    campaignId
+      ? sb.from("ai_settings").select("*").eq("user_id", userId).eq("campaign_id", campaignId).maybeSingle()
+      : sb.from("ai_settings").select("*").eq("user_id", userId).is("campaign_id", null).maybeSingle(),
     sb.from("analysis_settings").select("*").eq("user_id", userId).maybeSingle(),
-    sb.from("memory_insights").select("category,insight,confidence").eq("user_id", userId).eq("active", true).order("confidence", { ascending: false }).limit(15),
+    scopeCampaignId ? memQ.eq("campaign_id", scopeCampaignId) : memQ.is("campaign_id", null),
   ]);
-  const ai = aiRes.data;
+  let ai = aiRes.data;
+  if (!ai && campaignId) {
+    const { data: globalAi } = await sb.from("ai_settings").select("*").eq("user_id", userId).is("campaign_id", null).maybeSingle();
+    ai = globalAi;
+  }
   const analysisSet = analysisRes.data;
   const memory = memoryRes.data;
-  const { data: prevCaps } = await sb.from("captions").select("text,hashtags").order("created_at", { ascending: false }).limit(analysisSet?.n_value ?? 5);
+  let capQ = sb.from("captions").select("text,hashtags").eq("user_id", userId).order("created_at", { ascending: false }).limit(analysisSet?.n_value ?? 5);
+  capQ = scopeCampaignId ? capQ.eq("campaign_id", scopeCampaignId) : capQ.is("campaign_id", null);
+  const { data: prevCaps } = await capQ;
+
 
   const objective = ai?.objective === "custom" ? (ai?.custom_objective ?? "engagement") : (ai?.objective ?? "engagement");
   const prompt = `${captionPrompt}
