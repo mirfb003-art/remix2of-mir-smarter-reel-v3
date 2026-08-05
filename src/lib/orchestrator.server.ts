@@ -65,29 +65,74 @@ async function persistStepState(sb: Sb, runId: string, state: StepState, current
 
 // -------- Step implementations --------
 
-async function stepAnalyzePrevious(sb: Sb, userId: string, runId: string, aiSettings: AISettingsSchema, learningPrompt: string) {
-  const { data: prev } = await sb.from("runs")
-    .select(`id, captions(text,hashtags,cta,hook,length),
-      published_posts(post_analytics(views,likes,comments,shares,saves,reach,impressions))`)
+async function stepAnalyzePrevious(
+  sb: Sb, userId: string, runId: string, aiSettings: AISettingsSchema, learningPrompt: string,
+  scopeCampaignId: string | null, lookback = 5,
+) {
+  // Previous posts of the SAME campaign (its own queue/room), newest first.
+  let prevQ = sb.from("runs")
+    .select(`id, run_number, started_at,
+      captions(text,hashtags,cta,hook,length),
+      video_analyses(summary,topic,objects,scene,actions,emotions),
+      video_queue!runs_queue_item_id_fkey(cloudinary_url),
+      published_posts(posted_at,permalink,post_analytics(views,likes,comments,shares,saves,reach,impressions))`)
     .eq("user_id", userId).eq("status", "complete").neq("id", runId)
-    .order("started_at", { ascending: false }).limit(1).maybeSingle();
-  if (!prev) return null;
-  const cap = (prev as any).captions?.[0];
-  const analytics = (prev as any).published_posts?.[0]?.post_analytics?.[0];
-  if (!cap) return null;
+    .order("started_at", { ascending: false }).limit(Math.max(1, Math.min(lookback, 10)));
+  prevQ = scopeCampaignId ? prevQ.eq("campaign_id", scopeCampaignId) : prevQ.is("campaign_id", null);
+  const { data: prevRuns } = await prevQ;
+  const history = (prevRuns ?? []).filter((r: any) => r.captions?.[0]);
+  if (!history.length) return null;
+
+  const compact = history.map((r: any) => ({
+    run_number: r.run_number,
+    posted_at: r.published_posts?.[0]?.posted_at ?? r.started_at,
+    video: r.video_analyses?.[0] ?? null,
+    video_url: r.video_queue?.cloudinary_url ?? null,
+    caption: r.captions?.[0] ?? null,
+    analytics: r.published_posts?.[0]?.post_analytics?.[0] ?? null,
+  }));
+
+  // Visual context: one frame per previous video so the model can *see* what
+  // performed well or badly in this campaign, not just read the caption.
+  const frameUrls = await usableFrames(
+    compact.filter((c) => c.video_url).slice(0, 4).map((c) => cloudinaryThumb(c.video_url as string, "auto")),
+  );
+
+  const cap = compact[0].caption;
+  const analytics = compact[0].analytics;
 
   const t0 = Date.now();
+  const promptText = `${learningPrompt}
+
+CAMPAIGN HISTORY (same campaign only, newest first — analytics refreshed just now):
+${JSON.stringify(compact, null, 2)}
+
+MOST RECENT POST:
+Caption: ${JSON.stringify(cap)}
+Analytics: ${JSON.stringify(analytics ?? {})}
+
+The attached images are frames from those previous campaign videos, in the same order.
+Compare what the videos LOOK like against how they performed, and take notes.
+Return JSON with: worked, hook_verdict, length_verdict, emoji_verdict, hashtag_verdict, cta_verdict,
+cause, change_recommendation, and "new_insights": [{ "category", "insight", "confidence" }] capturing
+durable visual + copy lessons for this campaign.`;
+
   const result = await withRetry("ai",
     async () => executeAIRequest(aiSettings, (model) => generateText({
       model,
-      prompt: `${learningPrompt}\n\nPrevious caption: ${JSON.stringify(cap)}\nAnalytics: ${JSON.stringify(analytics ?? {})}`,
-    })),
+      ...(frameUrls.length
+        ? { messages: [{ role: "user" as const, content: [
+            { type: "text" as const, text: promptText },
+            ...frameUrls.map((u) => ({ type: "image" as const, image: u })),
+          ] }] }
+        : { prompt: promptText }),
+    } as any), frameUrls.length ? { requiresVision: true } : undefined),
     async (attempt, err, durationMs) => {
       await audit(sb, {
         userId, runId, eventType: err ? "ai.retry" : "ai.response",
         module: "ai", attempt, status: err ? "error" : "success", durationMs,
         error: err instanceof Error ? err.message : err ? String(err) : null,
-        payload: { purpose: "learning_report", mode: aiSettings.mode },
+        payload: { purpose: "learning_report", mode: aiSettings.mode, history: compact.length, frames: frameUrls.length },
       });
     },
   );
@@ -97,6 +142,7 @@ async function stepAnalyzePrevious(sb: Sb, userId: string, runId: string, aiSett
 
   await sb.from("learning_reports").insert({
     run_id: runId, user_id: userId,
+    campaign_id: scopeCampaignId,
     worked: !!report.worked,
     hook_verdict: report.hook_verdict ?? null,
     length_verdict: report.length_verdict ?? null,
@@ -106,12 +152,14 @@ async function stepAnalyzePrevious(sb: Sb, userId: string, runId: string, aiSett
     cause: report.cause ?? null,
     change_recommendation: report.change_recommendation ?? null,
     raw: report,
-  });
+  } as never);
 
   const insights = (report.new_insights ?? []) as Array<{ category: string; insight: string; confidence: number }>;
   for (const ins of insights) {
-    const { data: existing } = await sb.from("memory_insights").select("id,support_count,confidence")
-      .eq("user_id", userId).eq("category", ins.category as any).ilike("insight", ins.insight).maybeSingle();
+    let exQ = sb.from("memory_insights").select("id,support_count,confidence")
+      .eq("user_id", userId).eq("category", ins.category as any).ilike("insight", ins.insight);
+    exQ = scopeCampaignId ? exQ.eq("campaign_id", scopeCampaignId) : exQ.is("campaign_id", null);
+    const { data: existing } = await exQ.maybeSingle();
     if (existing) {
       await sb.from("memory_insights").update({
         support_count: existing.support_count + 1,
@@ -121,10 +169,12 @@ async function stepAnalyzePrevious(sb: Sb, userId: string, runId: string, aiSett
     } else {
       await sb.from("memory_insights").insert({
         user_id: userId, category: ins.category as any, insight: ins.insight,
+        campaign_id: scopeCampaignId,
         confidence: ins.confidence ?? 0.5, support_count: 1,
-      });
+      } as never);
     }
   }
+
   await audit(sb, { userId, runId, eventType: "learning.report_saved", module: "orchestrator", status: "success", durationMs: Date.now() - t0 });
   return report;
 }
