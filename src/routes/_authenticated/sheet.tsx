@@ -147,7 +147,7 @@ function SheetPage() {
   const importedFn = useServerFn(listImportedPosts);
   const campaignId = useScopedCampaignId();
   const { data } = useQuery({ queryKey: ["runs", campaignId], queryFn: () => fn({ data: { campaign_id: campaignId } }), refetchInterval: 15000 });
-  const { data: imported } = useQuery({ queryKey: ["imported-posts"], queryFn: () => importedFn(), refetchInterval: 60000 });
+  const { data: imported } = useQuery({ queryKey: ["imported-posts", campaignId], queryFn: () => importedFn({ data: { campaign_id: campaignId } }), refetchInterval: 60000 });
   const rows = useMemo(
     () => [...flatten(data ?? []), ...flattenImported(imported ?? [])]
       .sort((a, b) => new Date(b.started_at || 0).getTime() - new Date(a.started_at || 0).getTime()),
