@@ -81,15 +81,20 @@ export const dashboardStats = createServerFn({ method: "POST" })
   });
 
 // Posts that exist in Buffer but were not created by an app run (historical / manual posts).
-export const listImportedPosts = createServerFn({ method: "GET" })
+export const listImportedPosts = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
+  .inputValidator((d: unknown) => z.object({ campaign_id: z.string().uuid().nullable().optional() }).optional().parse(d))
+  .handler(async ({ data, context }) => {
+    let q = context.supabase
       .from("published_posts")
-      .select("id,buffer_post_id,permalink,posted_at,buffer_status,due_at,verified_at,platform,text_content,source,post_analytics(views,likes,comments,shares,saves,reach,impressions,fetched_at)")
+      .select("id,buffer_post_id,permalink,posted_at,buffer_status,due_at,verified_at,platform,text_content,source,campaign_id,post_analytics(views,likes,comments,shares,saves,reach,impressions,fetched_at)")
       .eq("source", "buffer_import")
       .order("posted_at", { ascending: false })
       .limit(300);
+    // Sheets are campaign-isolated: only this campaign's imported posts.
+    if (data?.campaign_id) q = q.eq("campaign_id", data.campaign_id);
+    const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
-    return data ?? [];
+    return rows ?? [];
   });
+

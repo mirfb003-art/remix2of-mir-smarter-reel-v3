@@ -21,7 +21,7 @@ export const Route = createFileRoute("/api/public/cron/fetch-analytics")({
 
         const { data: channels, error: chErr } = await supabaseAdmin
           .from("channels")
-          .select("id,user_id,platform,buffer_channel_id,active,buffer_credentials(api_token,graphql_endpoint)")
+          .select("id,user_id,platform,buffer_channel_id,active,campaign_id,buffer_credentials(api_token,graphql_endpoint)")
           .eq("active", true);
         if (chErr) return Response.json({ error: chErr.message }, { status: 500 });
 
@@ -60,6 +60,7 @@ export const Route = createFileRoute("/api/public/cron/fetch-analytics")({
             if (!row) {
               const { data: ins } = await supabaseAdmin.from("published_posts").insert({
                 user_id: ch.user_id, channel_id: ch.id, run_id: null,
+                campaign_id: (ch as any).campaign_id ?? null,
                 buffer_post_id: n.id, platform: ch.platform,
                 posted_at: n.sentAt, text_content: n.text,
                 permalink: (n.raw as any)?.externalLink ?? null,
@@ -96,7 +97,7 @@ export const Route = createFileRoute("/api/public/cron/fetch-analytics")({
                 }).eq("id", existing.id);
               } else {
                 await supabaseAdmin.from("post_analytics").insert({
-                  published_post_id: row!.id, user_id: ch.user_id, ...metrics, raw: n.raw as never,
+                  published_post_id: row!.id, user_id: ch.user_id, campaign_id: (ch as any).campaign_id ?? null, ...metrics, raw: n.raw as never,
                 });
               }
               updated++;
