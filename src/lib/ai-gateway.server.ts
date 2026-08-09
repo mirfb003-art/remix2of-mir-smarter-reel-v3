@@ -18,9 +18,23 @@ export type ProviderId =
 export interface ProviderConfig {
   id: ProviderId;
   apiKey: string;
+  /** Optional pool of keys for the SAME provider. Tried in order when one fails / hits quota. */
+  apiKeys?: string[];
   selectedModel: string;
   baseUrl?: string;
   accountId?: string; // Cloudflare only
+}
+
+/** All usable keys for a provider, in priority order, deduped. */
+export function providerKeyPool(cfg: ProviderConfig): string[] {
+  const list = [cfg.apiKey, ...(cfg.apiKeys ?? [])]
+    .map((k) => (k ?? "").trim())
+    .filter(Boolean);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const k of list) if (!seen.has(k)) { seen.add(k); out.push(k); }
+  if (!out.length && cfg.id === "lovable" && process.env.LOVABLE_API_KEY) out.push(process.env.LOVABLE_API_KEY);
+  return out;
 }
 
 export interface AISettingsSchema {
