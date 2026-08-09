@@ -149,6 +149,7 @@ function AiSettings() {
                 qc.invalidateQueries({ queryKey: ["ai-resolved"] });
               }}
               onHealth={async (cfg) => health({ data: cfg })}
+              onPoolHealth={async (cfg) => poolHealth({ data: cfg })}
               onDiscover={async (apiKey) => (await discover({ data: { apiKey, verify: true } })).models}
 
             />
