@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getAllSettings, updateAiSettings } from "@/lib/settings.functions";
 import {
-  getProviderCatalog, updateAIProviders, runHealthCheck, getResolvedAISettings,
+  getProviderCatalog, updateAIProviders, runHealthCheck, runKeyPoolHealthCheck, getResolvedAISettings,
   discoverGeminiModels,
 } from "@/lib/ai-providers.functions";
 
@@ -19,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, CheckCircle2, XCircle, Loader2, Sparkles, Eye, RefreshCw, Clock } from "lucide-react";
+import { ArrowDown, ArrowUp, CheckCircle2, XCircle, Loader2, Sparkles, Eye, RefreshCw, Clock, Trash2, Plus } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/settings/ai")({ component: AiSettings });
 
@@ -47,6 +47,7 @@ function AiSettings() {
   const getResolved = useServerFn(getResolvedAISettings);
   const updProviders = useServerFn(updateAIProviders);
   const health = useServerFn(runHealthCheck);
+  const poolHealth = useServerFn(runKeyPoolHealthCheck);
   const discover = useServerFn(discoverGeminiModels);
 
   const qc = useQueryClient();
@@ -149,6 +150,7 @@ function AiSettings() {
                 qc.invalidateQueries({ queryKey: ["ai-resolved"] });
               }}
               onHealth={async (cfg) => health({ data: cfg })}
+              onPoolHealth={async (cfg) => poolHealth({ data: cfg })}
               onDiscover={async (apiKey) => (await discover({ data: { apiKey, verify: true } })).models}
 
             />
@@ -161,7 +163,7 @@ function AiSettings() {
   );
 }
 
-interface ProviderCfg { id: ProviderId; apiKey: string; selectedModel: string; baseUrl?: string | null; accountId?: string | null }
+interface ProviderCfg { id: ProviderId; apiKey: string; apiKeys?: string[]; selectedModel: string; baseUrl?: string | null; accountId?: string | null }
 interface ResolvedAI {
   mode: "strict" | "fallback";
   activeProvider: ProviderId;
@@ -180,11 +182,12 @@ interface DiscoveredModel {
 }
 
 function ProvidersPanel({
-  catalog, initial, onSave, onHealth, onDiscover,
+  catalog, initial, onSave, onHealth, onPoolHealth, onDiscover,
 }: {
   catalog: Catalog; initial: ResolvedAI;
   onSave: (p: ResolvedAI) => Promise<void>;
   onHealth: (c: ProviderCfg) => Promise<{ ok: boolean; latencyMs: number; error?: string; sample?: string }>;
+  onPoolHealth: (c: ProviderCfg) => Promise<{ results: Array<{ index: number; ok: boolean; latencyMs: number; error?: string }> }>;
   onDiscover: (apiKey: string) => Promise<DiscoveredModel[]>;
 }) {
   const [mode, setMode] = useState<"strict" | "fallback">(initial.mode);
@@ -193,6 +196,7 @@ function ProvidersPanel({
   const [providers, setProviders] = useState<Partial<Record<ProviderId, ProviderCfg>>>(initial.providers);
   const [saving, setSaving] = useState(false);
   const [health, setHealth] = useState<Record<string, { ok: boolean; latencyMs: number; error?: string; sample?: string; loading?: boolean }>>({});
+  const [keyHealth, setKeyHealth] = useState<Record<string, { loading?: boolean; results?: Array<{ index: number; ok: boolean; latencyMs: number; error?: string }> }>>({});
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
   const [discovered, setDiscovered] = useState<DiscoveredModel[] | null>(null);
   const [discovering, setDiscovering] = useState(false);
@@ -204,11 +208,18 @@ function ProvidersPanel({
 
 
   const ensureCfg = (id: ProviderId): ProviderCfg => providers[id] ?? {
-    id, apiKey: "", selectedModel: catalog.models[id]?.[0]?.id ?? "",
+    id, apiKey: "", apiKeys: [], selectedModel: catalog.models[id]?.[0]?.id ?? "",
   };
 
   const patch = (id: ProviderId, next: Partial<ProviderCfg>) => {
     setProviders({ ...providers, [id]: { ...ensureCfg(id), ...next } });
+  };
+
+  // Key pool helpers — index 0 is the primary key, the rest are ordered backups.
+  const keysOf = (cfg: ProviderCfg): string[] => [cfg.apiKey ?? "", ...(cfg.apiKeys ?? [])];
+  const setKeys = (id: ProviderId, arr: string[]) => {
+    const list = arr.length ? arr : [""];
+    patch(id, { apiKey: list[0] ?? "", apiKeys: list.slice(1) });
   };
 
   const moveChain = (idx: number, dir: -1 | 1) => {
@@ -231,6 +242,20 @@ function ProvidersPanel({
       setHealth((h) => ({ ...h, [id]: { ...res, loading: false } }));
     } catch (e) {
       setHealth((h) => ({ ...h, [id]: { ok: false, latencyMs: 0, error: e instanceof Error ? e.message : "failed", loading: false } }));
+    }
+  };
+
+  const runKeyPoolHealth = async (id: ProviderId) => {
+    const cfg = ensureCfg(id);
+    setKeyHealth((h) => ({ ...h, [id]: { ...(h[id] ?? {}), loading: true } }));
+    try {
+      const res = await onPoolHealth(cfg);
+      setKeyHealth((h) => ({ ...h, [id]: { loading: false, results: res.results } }));
+      const ok = res.results.filter((r) => r.ok).length;
+      toast.success(`${ok}/${res.results.length} ${catalog.meta[id].name} keys working`);
+    } catch (e) {
+      setKeyHealth((h) => ({ ...h, [id]: { loading: false } }));
+      toast.error(e instanceof Error ? e.message : "Key test failed");
     }
   };
 
@@ -367,19 +392,64 @@ function ProvidersPanel({
                 </div>
               </CardHeader>
               <CardContent className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-1 md:col-span-2">
-                  <Label>API Key {id === "lovable" && <span className="text-xs text-muted-foreground">(auto — leave blank to use workspace key)</span>}</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      type={showKey[id] ? "text" : "password"}
-                      value={cfg.apiKey}
-                      onChange={(e) => patch(id, { apiKey: e.target.value })}
-                      placeholder={id === "lovable" ? "Uses LOVABLE_API_KEY from workspace" : "sk-..."}
-                    />
-                    <Button size="icon" variant="outline" onClick={() => setShowKey({ ...showKey, [id]: !showKey[id] })}>
-                      <Eye className="h-4 w-4"/>
-                    </Button>
+                <div className="space-y-2 md:col-span-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <Label>
+                      API Keys{" "}
+                      {id === "lovable"
+                        ? <span className="text-xs text-muted-foreground">(auto — leave blank to use workspace key)</span>
+                        : <span className="text-xs text-muted-foreground">(tried top-to-bottom — next key is used if one fails or hits its quota)</span>}
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      {keysOf(cfg).filter(Boolean).length > 1 && (
+                        <Button size="sm" variant="outline" disabled={keyHealth[id]?.loading}
+                          onClick={() => runKeyPoolHealth(id)}>
+                          {keyHealth[id]?.loading ? <Loader2 className="h-4 w-4 animate-spin"/> : "Test all keys"}
+                        </Button>
+                      )}
+                      <Button size="icon" variant="outline" onClick={() => setShowKey({ ...showKey, [id]: !showKey[id] })}>
+                        <Eye className="h-4 w-4"/>
+                      </Button>
+                    </div>
                   </div>
+                  {keysOf(cfg).map((k, ki) => {
+                    const kh = keyHealth[id]?.results?.find((r) => r.index === ki);
+                    const keys = keysOf(cfg);
+                    return (
+                      <div key={ki} className="space-y-1">
+                        <div className="flex gap-2 items-center">
+                          <span className="text-xs font-mono text-muted-foreground w-10 shrink-0">
+                            {ki === 0 ? "#1" : `#${ki + 1}`}
+                          </span>
+                          <Input
+                            type={showKey[id] ? "text" : "password"}
+                            value={k}
+                            onChange={(e) => {
+                              const next = [...keys];
+                              next[ki] = e.target.value;
+                              setKeys(id, next);
+                            }}
+                            placeholder={id === "lovable" ? "Uses LOVABLE_API_KEY from workspace" : ki === 0 ? "Primary key" : `Backup key #${ki + 1}`}
+                          />
+                          {kh && (kh.ok
+                            ? <Badge className="gap-1 shrink-0"><CheckCircle2 className="h-3 w-3"/>{kh.latencyMs}ms</Badge>
+                            : <Badge variant="destructive" className="gap-1 shrink-0"><XCircle className="h-3 w-3"/>Failed</Badge>)}
+                          {keys.length > 1 && (
+                            <Button size="icon" variant="ghost" className="shrink-0"
+                              onClick={() => setKeys(id, keys.filter((_, i) => i !== ki))}>
+                              <Trash2 className="h-4 w-4"/>
+                            </Button>
+                          )}
+                        </div>
+                        {kh && !kh.ok && kh.error && (
+                          <p className="text-[11px] text-destructive pl-12 break-words">{kh.error}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <Button size="sm" variant="outline" onClick={() => setKeys(id, [...keysOf(cfg), ""])}>
+                    <Plus className="h-4 w-4 mr-1"/>Add another {meta.name} key
+                  </Button>
                 </div>
                 <div className="space-y-1">
                   <Label className="flex items-center gap-2">

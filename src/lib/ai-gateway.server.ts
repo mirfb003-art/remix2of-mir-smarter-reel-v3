@@ -18,9 +18,23 @@ export type ProviderId =
 export interface ProviderConfig {
   id: ProviderId;
   apiKey: string;
+  /** Optional pool of keys for the SAME provider. Tried in order when one fails / hits quota. */
+  apiKeys?: string[];
   selectedModel: string;
   baseUrl?: string;
   accountId?: string; // Cloudflare only
+}
+
+/** All usable keys for a provider, in priority order, deduped. */
+export function providerKeyPool(cfg: ProviderConfig): string[] {
+  const list = [cfg.apiKey, ...(cfg.apiKeys ?? [])]
+    .map((k) => (k ?? "").trim())
+    .filter(Boolean);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const k of list) if (!seen.has(k)) { seen.add(k); out.push(k); }
+  if (!out.length && cfg.id === "lovable" && process.env.LOVABLE_API_KEY) out.push(process.env.LOVABLE_API_KEY);
+  return out;
 }
 
 export interface AISettingsSchema {
@@ -163,6 +177,9 @@ export function resolveAISettings(row: any | null | undefined): AISettingsSchema
     providers[id as ProviderId] = {
       id: id as ProviderId,
       apiKey: String(cfg.apiKey ?? ""),
+      apiKeys: Array.isArray(cfg.apiKeys)
+        ? cfg.apiKeys.map((k: unknown) => String(k ?? "").trim()).filter(Boolean)
+        : [],
       selectedModel: String(cfg.selectedModel ?? MODEL_REGISTRY[id as ProviderId]?.[0]?.id ?? ""),
       baseUrl: cfg.baseUrl ?? undefined,
       accountId: cfg.accountId ?? undefined,
@@ -201,21 +218,36 @@ export async function executeAIRequest<T>(
 ): Promise<T> {
   const requiresVision = !!opts.requiresVision;
 
-  const tryOne = async (cfg: ProviderConfig) => {
+  // Try every key configured for this provider, in order, until one works.
+  const tryProvider = async (cfg: ProviderConfig) => {
     const meta = modelMeta(cfg.id, cfg.selectedModel);
     if (requiresVision && meta && !meta.vision) {
       throw new Error(`Provider ${cfg.id}/${cfg.selectedModel} does not support vision.`);
     }
-    const model = getAIProviderInstance(cfg);
-    return executor(model, { providerId: cfg.id, modelId: cfg.selectedModel });
+    const keys = providerKeyPool(cfg);
+    if (!keys.length) throw new Error(`No API key configured for provider "${cfg.id}".`);
+    let lastKeyErr: unknown = null;
+    for (let i = 0; i < keys.length; i++) {
+      try {
+        const model = getAIProviderInstance({ ...cfg, apiKey: keys[i] });
+        return await executor(model, { providerId: cfg.id, modelId: cfg.selectedModel });
+      } catch (err) {
+        lastKeyErr = err;
+        // eslint-disable-next-line no-console
+        console.warn(`[AI Key Rotation] ${cfg.id} key #${i + 1}/${keys.length} failed:`, err instanceof Error ? err.message : err);
+      }
+    }
+    throw lastKeyErr instanceof Error
+      ? new Error(`All ${keys.length} ${cfg.id} API key(s) failed. Last error: ${lastKeyErr.message}`)
+      : new Error(`All ${keys.length} ${cfg.id} API key(s) failed.`);
   };
 
   if (settings.mode === "strict") {
     const cfg = settings.providers[settings.activeProvider];
-    if (!cfg || (!cfg.apiKey && cfg.id !== "lovable")) {
+    if (!cfg || (!providerKeyPool(cfg).length)) {
       throw new Error(`Strict Mode: API key missing for provider "${settings.activeProvider}".`);
     }
-    return tryOne(cfg);
+    return tryProvider(cfg);
   }
 
   let lastErr: unknown = null;
@@ -223,10 +255,11 @@ export async function executeAIRequest<T>(
   for (const pid of settings.fallbackChain) {
     const cfg = settings.providers[pid];
     if (!cfg) continue;
-    if (!cfg.apiKey && cfg.id !== "lovable") continue;
-    attempted.push(`${pid}/${cfg.selectedModel}`);
+    const keys = providerKeyPool(cfg);
+    if (!keys.length) continue;
+    attempted.push(`${pid}/${cfg.selectedModel} (${keys.length} key${keys.length > 1 ? "s" : ""})`);
     try {
-      return await tryOne(cfg);
+      return await tryProvider(cfg);
     } catch (err) {
       lastErr = err;
       // eslint-disable-next-line no-console

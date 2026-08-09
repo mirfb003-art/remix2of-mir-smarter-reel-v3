@@ -11,6 +11,7 @@ const providerIds = ["google","lovable","openai","openrouter","cloudflare","groq
 const providerConfigSchema = z.object({
   id: z.enum(providerIds),
   apiKey: z.string(),
+  apiKeys: z.array(z.string()).optional(),
   selectedModel: z.string(),
   baseUrl: z.string().nullable().optional(),
   accountId: z.string().nullable().optional(),
@@ -62,12 +63,38 @@ export const runHealthCheck = createServerFn({ method: "POST" })
     const cfg: ProviderConfig = {
       id: data.id as ProviderId,
       apiKey: data.apiKey,
+      apiKeys: data.apiKeys ?? [],
       selectedModel: data.selectedModel,
       baseUrl: data.baseUrl ?? undefined,
       accountId: data.accountId ?? undefined,
     };
     return healthCheckProvider(cfg);
   });
+
+/** Health check EVERY key configured for a provider, so the user sees which keys are alive. */
+export const runKeyPoolHealthCheck = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => providerConfigSchema.parse(d))
+  .handler(async ({ data }) => {
+    const { providerKeyPool } = await import("./ai-gateway.server");
+    const base: ProviderConfig = {
+      id: data.id as ProviderId,
+      apiKey: data.apiKey,
+      apiKeys: data.apiKeys ?? [],
+      selectedModel: data.selectedModel,
+      baseUrl: data.baseUrl ?? undefined,
+      accountId: data.accountId ?? undefined,
+    };
+    const keys = providerKeyPool(base);
+    const results = await Promise.all(
+      keys.map(async (k, index) => {
+        const r = await healthCheckProvider({ ...base, apiKey: k, apiKeys: [] });
+        return { index, ...r };
+      }),
+    );
+    return { results };
+  });
+
 
 export const getResolvedAISettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
