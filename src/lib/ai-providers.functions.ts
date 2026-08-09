@@ -11,6 +11,7 @@ const providerIds = ["google","lovable","openai","openrouter","cloudflare","groq
 const providerConfigSchema = z.object({
   id: z.enum(providerIds),
   apiKey: z.string(),
+  apiKeys: z.array(z.string()).optional(),
   selectedModel: z.string(),
   baseUrl: z.string().nullable().optional(),
   accountId: z.string().nullable().optional(),
