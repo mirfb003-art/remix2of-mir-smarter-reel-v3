@@ -180,11 +180,12 @@ interface DiscoveredModel {
 }
 
 function ProvidersPanel({
-  catalog, initial, onSave, onHealth, onDiscover,
+  catalog, initial, onSave, onHealth, onPoolHealth, onDiscover,
 }: {
   catalog: Catalog; initial: ResolvedAI;
   onSave: (p: ResolvedAI) => Promise<void>;
   onHealth: (c: ProviderCfg) => Promise<{ ok: boolean; latencyMs: number; error?: string; sample?: string }>;
+  onPoolHealth: (c: ProviderCfg) => Promise<{ results: Array<{ index: number; ok: boolean; latencyMs: number; error?: string }> }>;
   onDiscover: (apiKey: string) => Promise<DiscoveredModel[]>;
 }) {
   const [mode, setMode] = useState<"strict" | "fallback">(initial.mode);
@@ -193,6 +194,7 @@ function ProvidersPanel({
   const [providers, setProviders] = useState<Partial<Record<ProviderId, ProviderCfg>>>(initial.providers);
   const [saving, setSaving] = useState(false);
   const [health, setHealth] = useState<Record<string, { ok: boolean; latencyMs: number; error?: string; sample?: string; loading?: boolean }>>({});
+  const [keyHealth, setKeyHealth] = useState<Record<string, { loading?: boolean; results?: Array<{ index: number; ok: boolean; latencyMs: number; error?: string }> }>>({});
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
   const [discovered, setDiscovered] = useState<DiscoveredModel[] | null>(null);
   const [discovering, setDiscovering] = useState(false);
