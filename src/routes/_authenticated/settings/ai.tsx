@@ -47,6 +47,7 @@ function AiSettings() {
   const getResolved = useServerFn(getResolvedAISettings);
   const updProviders = useServerFn(updateAIProviders);
   const health = useServerFn(runHealthCheck);
+  const poolHealth = useServerFn(runKeyPoolHealthCheck);
   const discover = useServerFn(discoverGeminiModels);
 
   const qc = useQueryClient();
