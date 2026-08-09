@@ -161,7 +161,7 @@ function AiSettings() {
   );
 }
 
-interface ProviderCfg { id: ProviderId; apiKey: string; selectedModel: string; baseUrl?: string | null; accountId?: string | null }
+interface ProviderCfg { id: ProviderId; apiKey: string; apiKeys?: string[]; selectedModel: string; baseUrl?: string | null; accountId?: string | null }
 interface ResolvedAI {
   mode: "strict" | "fallback";
   activeProvider: ProviderId;
