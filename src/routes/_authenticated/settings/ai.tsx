@@ -19,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, CheckCircle2, XCircle, Loader2, Sparkles, Eye, RefreshCw, Clock } from "lucide-react";
+import { ArrowDown, ArrowUp, CheckCircle2, XCircle, Loader2, Sparkles, Eye, RefreshCw, Clock, Trash2, Plus } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/settings/ai")({ component: AiSettings });
 
