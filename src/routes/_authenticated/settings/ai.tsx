@@ -378,19 +378,64 @@ function ProvidersPanel({
                 </div>
               </CardHeader>
               <CardContent className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-1 md:col-span-2">
-                  <Label>API Key {id === "lovable" && <span className="text-xs text-muted-foreground">(auto — leave blank to use workspace key)</span>}</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      type={showKey[id] ? "text" : "password"}
-                      value={cfg.apiKey}
-                      onChange={(e) => patch(id, { apiKey: e.target.value })}
-                      placeholder={id === "lovable" ? "Uses LOVABLE_API_KEY from workspace" : "sk-..."}
-                    />
-                    <Button size="icon" variant="outline" onClick={() => setShowKey({ ...showKey, [id]: !showKey[id] })}>
-                      <Eye className="h-4 w-4"/>
-                    </Button>
+                <div className="space-y-2 md:col-span-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <Label>
+                      API Keys{" "}
+                      {id === "lovable"
+                        ? <span className="text-xs text-muted-foreground">(auto — leave blank to use workspace key)</span>
+                        : <span className="text-xs text-muted-foreground">(tried top-to-bottom — next key is used if one fails or hits its quota)</span>}
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      {keysOf(cfg).filter(Boolean).length > 1 && (
+                        <Button size="sm" variant="outline" disabled={keyHealth[id]?.loading}
+                          onClick={() => runKeyPoolHealth(id)}>
+                          {keyHealth[id]?.loading ? <Loader2 className="h-4 w-4 animate-spin"/> : "Test all keys"}
+                        </Button>
+                      )}
+                      <Button size="icon" variant="outline" onClick={() => setShowKey({ ...showKey, [id]: !showKey[id] })}>
+                        <Eye className="h-4 w-4"/>
+                      </Button>
+                    </div>
                   </div>
+                  {keysOf(cfg).map((k, ki) => {
+                    const kh = keyHealth[id]?.results?.find((r) => r.index === ki);
+                    const keys = keysOf(cfg);
+                    return (
+                      <div key={ki} className="space-y-1">
+                        <div className="flex gap-2 items-center">
+                          <span className="text-xs font-mono text-muted-foreground w-10 shrink-0">
+                            {ki === 0 ? "#1" : `#${ki + 1}`}
+                          </span>
+                          <Input
+                            type={showKey[id] ? "text" : "password"}
+                            value={k}
+                            onChange={(e) => {
+                              const next = [...keys];
+                              next[ki] = e.target.value;
+                              setKeys(id, next);
+                            }}
+                            placeholder={id === "lovable" ? "Uses LOVABLE_API_KEY from workspace" : ki === 0 ? "Primary key" : `Backup key #${ki + 1}`}
+                          />
+                          {kh && (kh.ok
+                            ? <Badge className="gap-1 shrink-0"><CheckCircle2 className="h-3 w-3"/>{kh.latencyMs}ms</Badge>
+                            : <Badge variant="destructive" className="gap-1 shrink-0"><XCircle className="h-3 w-3"/>Failed</Badge>)}
+                          {keys.length > 1 && (
+                            <Button size="icon" variant="ghost" className="shrink-0"
+                              onClick={() => setKeys(id, keys.filter((_, i) => i !== ki))}>
+                              <Trash2 className="h-4 w-4"/>
+                            </Button>
+                          )}
+                        </div>
+                        {kh && !kh.ok && kh.error && (
+                          <p className="text-[11px] text-destructive pl-12 break-words">{kh.error}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <Button size="sm" variant="outline" onClick={() => setKeys(id, [...keysOf(cfg), ""])}>
+                    <Plus className="h-4 w-4 mr-1"/>Add another {meta.name} key
+                  </Button>
                 </div>
                 <div className="space-y-1">
                   <Label className="flex items-center gap-2">
