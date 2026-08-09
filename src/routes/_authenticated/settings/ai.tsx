@@ -245,6 +245,20 @@ function ProvidersPanel({
     }
   };
 
+  const runKeyPoolHealth = async (id: ProviderId) => {
+    const cfg = ensureCfg(id);
+    setKeyHealth((h) => ({ ...h, [id]: { ...(h[id] ?? {}), loading: true } }));
+    try {
+      const res = await onPoolHealth(cfg);
+      setKeyHealth((h) => ({ ...h, [id]: { loading: false, results: res.results } }));
+      const ok = res.results.filter((r) => r.ok).length;
+      toast.success(`${ok}/${res.results.length} ${catalog.meta[id].name} keys working`);
+    } catch (e) {
+      setKeyHealth((h) => ({ ...h, [id]: { loading: false } }));
+      toast.error(e instanceof Error ? e.message : "Key test failed");
+    }
+  };
+
   const googleKey = providers.google?.apiKey ?? "";
 
   const runDiscovery = async (apiKey: string) => {
