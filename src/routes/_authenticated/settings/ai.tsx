@@ -204,11 +204,18 @@ function ProvidersPanel({
 
 
   const ensureCfg = (id: ProviderId): ProviderCfg => providers[id] ?? {
-    id, apiKey: "", selectedModel: catalog.models[id]?.[0]?.id ?? "",
+    id, apiKey: "", apiKeys: [], selectedModel: catalog.models[id]?.[0]?.id ?? "",
   };
 
   const patch = (id: ProviderId, next: Partial<ProviderCfg>) => {
     setProviders({ ...providers, [id]: { ...ensureCfg(id), ...next } });
+  };
+
+  // Key pool helpers — index 0 is the primary key, the rest are ordered backups.
+  const keysOf = (cfg: ProviderCfg): string[] => [cfg.apiKey ?? "", ...(cfg.apiKeys ?? [])];
+  const setKeys = (id: ProviderId, arr: string[]) => {
+    const list = arr.length ? arr : [""];
+    patch(id, { apiKey: list[0] ?? "", apiKeys: list.slice(1) });
   };
 
   const moveChain = (idx: number, dir: -1 | 1) => {
