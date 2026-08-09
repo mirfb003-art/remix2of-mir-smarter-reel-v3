@@ -177,6 +177,9 @@ export function resolveAISettings(row: any | null | undefined): AISettingsSchema
     providers[id as ProviderId] = {
       id: id as ProviderId,
       apiKey: String(cfg.apiKey ?? ""),
+      apiKeys: Array.isArray(cfg.apiKeys)
+        ? cfg.apiKeys.map((k: unknown) => String(k ?? "").trim()).filter(Boolean)
+        : [],
       selectedModel: String(cfg.selectedModel ?? MODEL_REGISTRY[id as ProviderId]?.[0]?.id ?? ""),
       baseUrl: cfg.baseUrl ?? undefined,
       accountId: cfg.accountId ?? undefined,
