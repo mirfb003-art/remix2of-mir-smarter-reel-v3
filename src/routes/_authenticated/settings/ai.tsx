@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getAllSettings, updateAiSettings } from "@/lib/settings.functions";
 import {
-  getProviderCatalog, updateAIProviders, runHealthCheck, getResolvedAISettings,
+  getProviderCatalog, updateAIProviders, runHealthCheck, runKeyPoolHealthCheck, getResolvedAISettings,
   discoverGeminiModels,
 } from "@/lib/ai-providers.functions";
 
