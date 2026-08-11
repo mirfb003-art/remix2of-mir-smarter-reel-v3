@@ -104,3 +104,24 @@ export async function refreshChannelAnalytics(
 
   return { fetched: nodes.length, imported, updated };
 }
+
+// Refresh every channel that belongs to a campaign (or the workspace when null),
+// so the campaign Sheet keeps previous posts' analytics up to date on every run.
+export async function refreshCampaignAnalytics(
+  sb: Sb,
+  opts: { userId: string; campaignId: string | null; limit?: number },
+): Promise<{ channels: number; fetched: number; imported: number; updated: number }> {
+  let q = sb.from("channels").select("id").eq("user_id", opts.userId).is("missing_since", null);
+  q = opts.campaignId ? (q as any).or(`campaign_id.eq.${opts.campaignId},campaign_id.is.null`) : (q as any).is("campaign_id", null);
+  const { data: chans } = await q;
+  let fetched = 0, imported = 0, updated = 0;
+  for (const c of chans ?? []) {
+    try {
+      const r = await refreshChannelAnalytics(sb, {
+        userId: opts.userId, channelId: (c as any).id, campaignId: opts.campaignId, limit: opts.limit,
+      });
+      fetched += r.fetched; imported += r.imported; updated += r.updated;
+    } catch { /* one bad channel must not stop the rest */ }
+  }
+  return { channels: (chans ?? []).length, fetched, imported, updated };
+}
