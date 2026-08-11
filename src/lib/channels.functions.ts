@@ -8,7 +8,7 @@ export const listChannels = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     let q = context.supabase
       .from("channels")
-      .select("id,name,platform,buffer_channel_id,active,credential_id,campaign_id")
+      .select("id,name,platform,buffer_channel_id,active,credential_id,campaign_id,last_seen_at,missing_since")
       .order("created_at", { ascending: false });
     // Campaign mode shows campaign-owned channels plus unassigned (shared) ones.
     if (data?.campaign_id) q = q.or(`campaign_id.eq.${data.campaign_id},campaign_id.is.null`);
@@ -55,9 +55,22 @@ export const saveChannel = createServerFn({ method: "POST" })
 
 export const deleteChannel = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .inputValidator((d: unknown) => z.object({
+    id: z.string().uuid(),
+    // Optionally hand this channel's pending queue items to a replacement channel.
+    move_queue_to: z.string().uuid().nullable().optional(),
+  }).parse(d))
   .handler(async ({ data, context }) => {
-    const { error } = await context.supabase.from("channels").delete().eq("id", data.id);
+    const sb = context.supabase;
+    // Detach every reference first — history stays intact, only the link is cleared.
+    await sb.from("video_queue")
+      .update({ channel_id: data.move_queue_to ?? null })
+      .eq("channel_id", data.id);
+    await sb.from("schedules").delete().eq("channel_id", data.id);
+    await sb.from("published_posts").update({ channel_id: null }).eq("channel_id", data.id);
+    await sb.from("memory_insights").update({ channel_id: null }).eq("channel_id", data.id);
+    await sb.from("runs").update({ channel_id: null }).eq("channel_id", data.id);
+    const { error } = await sb.from("channels").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
