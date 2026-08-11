@@ -32,6 +32,9 @@ function QueuePage() {
 
   const [text, setText] = useState("");
   const [channelId, setChannelId] = useState<string>("");
+  const [bulkFrom, setBulkFrom] = useState<string>("");
+  const [bulkTo, setBulkTo] = useState<string>("");
+  const moveChan = useServerFn(moveQueueToChannel);
 
   const { data: items } = useQuery({
     queryKey: ["queue", campaignId],
@@ -68,6 +71,17 @@ function QueuePage() {
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
+  const moveChanMut = useMutation({
+    mutationFn: (v: { ids?: string[]; from_channel_id?: string | null; to_channel_id: string | null }) =>
+      moveChan({ data: { ...v, campaign_id: campaignId, only_pending: true } }),
+    onSuccess: (r) => {
+      toast.success(`Moved ${r.moved} item${r.moved === 1 ? "" : "s"}`);
+      qc.invalidateQueries({ queryKey: ["queue"] });
+      qc.invalidateQueries({ queryKey: ["dead-letters"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+
 
   function submit() {
     const urls = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
