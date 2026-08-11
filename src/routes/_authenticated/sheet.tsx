@@ -1,14 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listRuns, listImportedPosts } from "@/lib/runs.functions";
+import { refreshCampaignSheet } from "@/lib/analytics.functions";
 import { useScopedCampaignId } from "@/components/campaign-context";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Download } from "lucide-react";
+import { Download, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/sheet")({ component: SheetPage });
@@ -145,9 +146,23 @@ function download(name: string, mime: string, data: string | Blob) {
 function SheetPage() {
   const fn = useServerFn(listRuns);
   const importedFn = useServerFn(listImportedPosts);
+  const refreshFn = useServerFn(refreshCampaignSheet);
+  const qc = useQueryClient();
   const campaignId = useScopedCampaignId();
   const { data } = useQuery({ queryKey: ["runs", campaignId], queryFn: () => fn({ data: { campaign_id: campaignId } }), refetchInterval: 15000 });
   const { data: imported } = useQuery({ queryKey: ["imported-posts", campaignId], queryFn: () => importedFn({ data: { campaign_id: campaignId } }), refetchInterval: 60000 });
+  // Keep this campaign's older posts' metrics fresh without waiting for the next run.
+  const refreshMut = useMutation({
+    mutationFn: () => refreshFn({ data: { campaign_id: campaignId } }),
+    onSuccess: (r) => {
+      toast.success(`Synced ${r.fetched} post${r.fetched === 1 ? "" : "s"} · ${r.updated} metric update${r.updated === 1 ? "" : "s"}`);
+      qc.invalidateQueries({ queryKey: ["runs"] });
+      qc.invalidateQueries({ queryKey: ["imported-posts"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Refresh failed"),
+  });
+  useEffect(() => { refreshMut.mutate(); /* refresh once when the sheet opens */ // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaignId]);
   const rows = useMemo(
     () => [...flatten(data ?? []), ...flattenImported(imported ?? [])]
       .sort((a, b) => new Date(b.started_at || 0).getTime() - new Date(a.started_at || 0).getTime()),
@@ -183,6 +198,9 @@ function SheetPage() {
         </div>
         <div className="flex gap-2">
           <Input placeholder="Search…" value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }} className="w-56" />
+          <Button variant="outline" onClick={() => refreshMut.mutate()} disabled={refreshMut.isPending}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${refreshMut.isPending ? "animate-spin" : ""}`}/>Refresh metrics
+          </Button>
           <Button variant="outline" onClick={() => download("loop-runs.csv", "text/csv", toCsv(rows))}><Download className="h-4 w-4 mr-2"/>CSV</Button>
           <Button variant="outline" onClick={exportXlsx}><Download className="h-4 w-4 mr-2"/>XLSX</Button>
           <Button variant="outline" onClick={() => download("loop-runs.json", "application/json", JSON.stringify(rows, null, 2))}><Download className="h-4 w-4 mr-2"/>JSON</Button>

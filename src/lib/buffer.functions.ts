@@ -160,12 +160,16 @@ export const syncBufferChannels = createServerFn({ method: "POST" })
       .eq("credential_id", data.id);
     const existingMap = new Map((existing ?? []).map((c) => [c.buffer_channel_id, c.id]));
 
+    const now = new Date().toISOString();
     const synced: Array<{ id: string; name: string; platform: string; avatar?: string }> = [];
     for (const ch of allChannels) {
       const name = ch.name || ch.service || "Channel";
       const platform = (ch.service || "unknown").toLowerCase();
       if (existingMap.has(ch.id)) {
-        await context.supabase.from("channels").update({ name, platform, campaign_id: (cred as any).campaign_id ?? null }).eq("id", existingMap.get(ch.id)!);
+        await context.supabase.from("channels").update({
+          name, platform, campaign_id: (cred as any).campaign_id ?? null,
+          last_seen_at: now, missing_since: null, active: true,
+        } as never).eq("id", existingMap.get(ch.id)!);
       } else {
         await context.supabase.from("channels").insert({
           user_id: context.userId,
@@ -175,15 +179,28 @@ export const syncBufferChannels = createServerFn({ method: "POST" })
           name,
           platform,
           active: true,
-        });
+          last_seen_at: now,
+        } as never);
       }
       synced.push({ id: ch.id, name, platform, avatar: ch.avatar });
     }
 
+    // Channels this credential used to have but Buffer no longer returns:
+    // flag them as missing + inactive so the UI can show them in red and offer delete.
+    const liveIds = new Set(allChannels.map((c) => c.id));
+    const stale = (existing ?? []).filter((c) => !liveIds.has(c.buffer_channel_id));
+    if (stale.length) {
+      await context.supabase
+        .from("channels")
+        .update({ missing_since: now, active: false } as never)
+        .in("id", stale.map((c) => c.id));
+    }
+
     await context.supabase
       .from("buffer_credentials")
-      .update({ status: "connected", last_tested_at: new Date().toISOString() })
+      .update({ status: "connected", last_tested_at: now })
       .eq("id", data.id);
 
-    return { count: synced.length, channels: synced };
+    return { count: synced.length, channels: synced, missing: stale.length };
   });
+

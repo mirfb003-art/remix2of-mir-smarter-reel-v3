@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listBufferCreds, saveBufferCred, deleteBufferCred, syncBufferChannels } from "@/lib/buffer.functions";
-import { listChannels } from "@/lib/channels.functions";
+import { listChannels, deleteChannel } from "@/lib/channels.functions";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,19 @@ function BufferSettings() {
   const [label, setLabel] = useState("");
   const [token, setToken] = useState("");
   const [syncedPreview, setSyncedPreview] = useState<Array<{ id: string; name: string; platform: string; avatar?: string }>>([]);
+  const [moveTargets, setMoveTargets] = useState<Record<string, string>>({});
+  const delChan = useServerFn(deleteChannel);
+  const delChanMut = useMutation({
+    mutationFn: (v: { id: string; move_queue_to: string | null }) => delChan({ data: v }),
+    onSuccess: () => {
+      toast.success("Channel removed");
+      qc.invalidateQueries({ queryKey: ["channels"] });
+      qc.invalidateQueries({ queryKey: ["queue"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+
+
 
   const syncMut = useMutation({
     mutationFn: (id: string) => sync({ data: { id } }),
@@ -130,20 +144,43 @@ function BufferSettings() {
       <Card>
         <CardHeader>
           <CardTitle>Connected channels</CardTitle>
-          <CardDescription>Automatically populated from your Buffer account.</CardDescription>
+          <CardDescription>Automatically populated from your Buffer account. Channels no longer found in Buffer are marked in red — delete them and their queue moves to the channel you pick.</CardDescription>
         </CardHeader>
         <CardContent>
           {(chans ?? []).length === 0 ? <div className="text-sm text-muted-foreground">No channels yet — save an account above.</div> : (
             <ul className="divide-y divide-border">
-              {(chans ?? []).map((c) => (
-                <li key={c.id} className="py-2 flex items-center gap-3 text-sm">
-                  <div className="flex-1">
-                    <div className="font-medium">{c.name}</div>
-                    <div className="text-xs text-muted-foreground">{c.platform} · {c.buffer_channel_id}</div>
-                  </div>
-                  <Badge variant={c.active ? "default" : "outline"}>{c.active ? "active" : "off"}</Badge>
-                </li>
-              ))}
+              {(chans ?? []).map((c) => {
+                const missing = Boolean((c as any).missing_since);
+                return (
+                  <li key={c.id} className={`py-2 flex flex-wrap items-center gap-2 text-sm ${missing ? "text-destructive" : ""}`}>
+                    <div className="flex-1 min-w-[160px]">
+                      <div className="font-medium">{c.name}</div>
+                      <div className={`text-xs ${missing ? "text-destructive/80" : "text-muted-foreground"}`}>
+                        {c.platform} · {c.buffer_channel_id}
+                      </div>
+                    </div>
+                    {missing ? (
+                      <>
+                        <Badge variant="destructive">not in Buffer</Badge>
+                        <Select value={moveTargets[c.id] ?? ""} onValueChange={(v) => setMoveTargets((m) => ({ ...m, [c.id]: v }))}>
+                          <SelectTrigger className="w-48 h-8 text-xs"><SelectValue placeholder="Move queue to…" /></SelectTrigger>
+                          <SelectContent>
+                            {(chans ?? []).filter((o) => o.id !== c.id && !(o as any).missing_since).map((o) => (
+                              <SelectItem key={o.id} value={o.id}>{o.name} · {o.platform}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button size="sm" variant="destructive" disabled={delChanMut.isPending}
+                          onClick={() => delChanMut.mutate({ id: c.id, move_queue_to: moveTargets[c.id] || null })}>
+                          <Trash2 className="h-4 w-4 mr-1" />Delete
+                        </Button>
+                      </>
+                    ) : (
+                      <Badge variant={c.active ? "default" : "outline"}>{c.active ? "active" : "off"}</Badge>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </CardContent>

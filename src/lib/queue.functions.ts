@@ -145,3 +145,29 @@ export const moveQueueItem = createServerFn({ method: "POST" })
     await context.supabase.from("video_queue").update({ position: b.position }).eq("id", a.id);
     return { ok: true };
   });
+
+// Move queue items to a different channel — either a specific set of items or
+// every item currently pointing at an old (e.g. removed/reconnected) channel.
+export const moveQueueToChannel = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    ids: z.array(z.string().uuid()).optional(),
+    from_channel_id: z.string().uuid().nullable().optional(),
+    to_channel_id: z.string().uuid().nullable(),
+    campaign_id: z.string().uuid().nullable().optional(),
+    only_pending: z.boolean().default(true),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    let q = context.supabase
+      .from("video_queue")
+      .update({ channel_id: data.to_channel_id })
+      .eq("user_id", context.userId);
+    if (data.ids?.length) q = q.in("id", data.ids);
+    else if (data.from_channel_id) q = q.eq("channel_id", data.from_channel_id);
+    else if (data.from_channel_id === null) q = q.is("channel_id", null);
+    if (data.campaign_id) q = q.eq("campaign_id", data.campaign_id);
+    if (data.only_pending) q = q.in("status", ["pending", "failed", "dead_letter"]);
+    const { data: rows, error } = await q.select("id");
+    if (error) throw new Error(error.message);
+    return { moved: rows?.length ?? 0 };
+  });

@@ -327,7 +327,9 @@ export type Database = {
           created_at: string
           credential_id: string | null
           id: string
+          last_seen_at: string | null
           lock_expires_at: string | null
+          missing_since: string | null
           name: string
           platform: string
           updated_at: string
@@ -341,7 +343,9 @@ export type Database = {
           created_at?: string
           credential_id?: string | null
           id?: string
+          last_seen_at?: string | null
           lock_expires_at?: string | null
+          missing_since?: string | null
           name: string
           platform: string
           updated_at?: string
@@ -355,7 +359,9 @@ export type Database = {
           created_at?: string
           credential_id?: string | null
           id?: string
+          last_seen_at?: string | null
           lock_expires_at?: string | null
+          missing_since?: string | null
           name?: string
           platform?: string
           updated_at?: string

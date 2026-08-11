@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
-import { listQueue, addToQueue, removeFromQueue, resetQueueItem, moveQueueItem, listDeadLetters, retryDeadLetter } from "@/lib/queue.functions";
+import { listQueue, addToQueue, removeFromQueue, resetQueueItem, moveQueueItem, listDeadLetters, retryDeadLetter, moveQueueToChannel } from "@/lib/queue.functions";
 import { listChannels } from "@/lib/channels.functions";
 import { useScopedCampaignId } from "@/components/campaign-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Trash2, RotateCcw, Plus, ListVideo, ArrowUp, ArrowDown, AlertTriangle, RefreshCw, Upload } from "lucide-react";
+import { Trash2, RotateCcw, Plus, ListVideo, ArrowUp, ArrowDown, AlertTriangle, RefreshCw, Upload, ArrowRightLeft } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export const Route = createFileRoute("/_authenticated/queue")({ component: QueuePage });
@@ -32,6 +32,9 @@ function QueuePage() {
 
   const [text, setText] = useState("");
   const [channelId, setChannelId] = useState<string>("");
+  const [bulkFrom, setBulkFrom] = useState<string>("");
+  const [bulkTo, setBulkTo] = useState<string>("");
+  const moveChan = useServerFn(moveQueueToChannel);
 
   const { data: items } = useQuery({
     queryKey: ["queue", campaignId],
@@ -68,6 +71,17 @@ function QueuePage() {
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
+  const moveChanMut = useMutation({
+    mutationFn: (v: { ids?: string[]; from_channel_id?: string | null; to_channel_id: string | null }) =>
+      moveChan({ data: { ...v, campaign_id: campaignId, only_pending: true } }),
+    onSuccess: (r) => {
+      toast.success(`Moved ${r.moved} item${r.moved === 1 ? "" : "s"}`);
+      qc.invalidateQueries({ queryKey: ["queue"] });
+      qc.invalidateQueries({ queryKey: ["dead-letters"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+
 
   function submit() {
     const urls = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
@@ -121,6 +135,35 @@ function QueuePage() {
 
       <Card>
         <CardHeader>
+          <CardTitle className="flex items-center gap-2"><ArrowRightLeft className="h-4 w-4"/>Move queue to another channel</CardTitle>
+          <CardDescription>Reassign pending/failed items — useful when a Buffer channel was reconnected and got a new ID.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2 items-center">
+          <Select value={bulkFrom} onValueChange={setBulkFrom}>
+            <SelectTrigger className="w-56"><SelectValue placeholder="From channel" /></SelectTrigger>
+            <SelectContent>
+              {(channels ?? []).map((c) => (
+                <SelectItem key={c.id} value={c.id}>{c.name} · {c.platform}{(c as any).missing_since ? " (missing)" : ""}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={bulkTo} onValueChange={setBulkTo}>
+            <SelectTrigger className="w-56"><SelectValue placeholder="To channel" /></SelectTrigger>
+            <SelectContent>
+              {(channels ?? []).filter((c) => !(c as any).missing_since).map((c) => (
+                <SelectItem key={c.id} value={c.id}>{c.name} · {c.platform}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button disabled={!bulkFrom || !bulkTo || moveChanMut.isPending}
+            onClick={() => moveChanMut.mutate({ from_channel_id: bulkFrom, to_channel_id: bulkTo })}>
+            Move all
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle className="flex items-center gap-2"><ListVideo className="h-4 w-4"/>Queue ({list_.length})</CardTitle>
         </CardHeader>
         <CardContent>
@@ -129,10 +172,18 @@ function QueuePage() {
           ) : (
             <ul className="divide-y divide-border">
               {list_.map((it, i) => (
-                <li key={it.id} className="py-3 flex items-center gap-3">
+                <li key={it.id} className="py-3 flex flex-wrap items-center gap-3">
                   <span className="text-xs text-muted-foreground w-8">#{it.position}</span>
                   <Badge variant="outline" className="capitalize">{it.status}</Badge>
-                  <span className="font-mono text-xs truncate flex-1 text-muted-foreground">{it.cloudinary_url}</span>
+                  <span className="font-mono text-xs truncate flex-1 min-w-[120px] text-muted-foreground">{it.cloudinary_url}</span>
+                  <Select value={it.channel_id ?? ""} onValueChange={(v) => moveChanMut.mutate({ ids: [it.id], to_channel_id: v })}>
+                    <SelectTrigger className="w-44 h-8 text-xs"><SelectValue placeholder="No channel" /></SelectTrigger>
+                    <SelectContent>
+                      {(channels ?? []).map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.name} · {c.platform}{(c as any).missing_since ? " (missing)" : ""}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   {it.error && <span className="text-xs text-destructive truncate max-w-[180px]">{it.error}</span>}
                   {it.status === "pending" && (
                     <>
