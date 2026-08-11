@@ -616,8 +616,8 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
 
     // Step: refresh this campaign's post analytics so the Sheet + learning use live numbers.
     try {
-      const { refreshChannelAnalytics } = await import("./analytics-sync.server");
-      const res = await refreshChannelAnalytics(sb, { userId, channelId, campaignId });
+      const { refreshCampaignAnalytics } = await import("./analytics-sync.server");
+      const res = await refreshCampaignAnalytics(sb, { userId, campaignId });
       await audit(sb, { userId, runId, eventType: "analytics.refreshed", module: "orchestrator", status: "success", payload: res });
     } catch (e) {
       await log(sb, userId, runId, "warn", "orchestrator", `Analytics refresh skipped: ${e instanceof Error ? e.message : String(e)}`);
