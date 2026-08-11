@@ -145,9 +145,23 @@ function download(name: string, mime: string, data: string | Blob) {
 function SheetPage() {
   const fn = useServerFn(listRuns);
   const importedFn = useServerFn(listImportedPosts);
+  const refreshFn = useServerFn(refreshCampaignSheet);
+  const qc = useQueryClient();
   const campaignId = useScopedCampaignId();
   const { data } = useQuery({ queryKey: ["runs", campaignId], queryFn: () => fn({ data: { campaign_id: campaignId } }), refetchInterval: 15000 });
   const { data: imported } = useQuery({ queryKey: ["imported-posts", campaignId], queryFn: () => importedFn({ data: { campaign_id: campaignId } }), refetchInterval: 60000 });
+  // Keep this campaign's older posts' metrics fresh without waiting for the next run.
+  const refreshMut = useMutation({
+    mutationFn: () => refreshFn({ data: { campaign_id: campaignId } }),
+    onSuccess: (r) => {
+      toast.success(`Synced ${r.fetched} post${r.fetched === 1 ? "" : "s"} · ${r.updated} metric update${r.updated === 1 ? "" : "s"}`);
+      qc.invalidateQueries({ queryKey: ["runs"] });
+      qc.invalidateQueries({ queryKey: ["imported-posts"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Refresh failed"),
+  });
+  useEffect(() => { refreshMut.mutate(); /* refresh once when the sheet opens */ // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaignId]);
   const rows = useMemo(
     () => [...flatten(data ?? []), ...flattenImported(imported ?? [])]
       .sort((a, b) => new Date(b.started_at || 0).getTime() - new Date(a.started_at || 0).getTime()),
