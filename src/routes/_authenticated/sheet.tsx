@@ -198,6 +198,9 @@ function SheetPage() {
         </div>
         <div className="flex gap-2">
           <Input placeholder="Search…" value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }} className="w-56" />
+          <Button variant="outline" onClick={() => refreshMut.mutate()} disabled={refreshMut.isPending}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${refreshMut.isPending ? "animate-spin" : ""}`}/>Refresh metrics
+          </Button>
           <Button variant="outline" onClick={() => download("loop-runs.csv", "text/csv", toCsv(rows))}><Download className="h-4 w-4 mr-2"/>CSV</Button>
           <Button variant="outline" onClick={exportXlsx}><Download className="h-4 w-4 mr-2"/>XLSX</Button>
           <Button variant="outline" onClick={() => download("loop-runs.json", "application/json", JSON.stringify(rows, null, 2))}><Download className="h-4 w-4 mr-2"/>JSON</Button>
