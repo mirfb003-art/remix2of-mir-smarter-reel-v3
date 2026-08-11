@@ -31,6 +31,19 @@ function BufferSettings() {
   const [label, setLabel] = useState("");
   const [token, setToken] = useState("");
   const [syncedPreview, setSyncedPreview] = useState<Array<{ id: string; name: string; platform: string; avatar?: string }>>([]);
+  const [moveTargets, setMoveTargets] = useState<Record<string, string>>({});
+  const delChan = useServerFn(deleteChannel);
+  const delChanMut = useMutation({
+    mutationFn: (v: { id: string; move_queue_to: string | null }) => delChan({ data: v }),
+    onSuccess: () => {
+      toast.success("Channel removed");
+      qc.invalidateQueries({ queryKey: ["channels"] });
+      qc.invalidateQueries({ queryKey: ["queue"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+
+
 
   const syncMut = useMutation({
     mutationFn: (id: string) => sync({ data: { id } }),
