@@ -221,11 +221,9 @@ export type Database = {
           objective: string
           publish_delay_minutes: number | null
           publish_mode: string
-          sample_caption_mode: string
           share_learning: boolean
           status: string
           updated_at: string
-          use_sample_captions: boolean
           user_id: string
         }
         Insert: {
@@ -238,11 +236,9 @@ export type Database = {
           objective?: string
           publish_delay_minutes?: number | null
           publish_mode?: string
-          sample_caption_mode?: string
           share_learning?: boolean
           status?: string
           updated_at?: string
-          use_sample_captions?: boolean
           user_id: string
         }
         Update: {
@@ -255,49 +251,12 @@ export type Database = {
           objective?: string
           publish_delay_minutes?: number | null
           publish_mode?: string
-          sample_caption_mode?: string
           share_learning?: boolean
           status?: string
           updated_at?: string
-          use_sample_captions?: boolean
           user_id?: string
         }
         Relationships: []
-      }
-      sample_captions: {
-        Row: {
-          campaign_id: string
-          created_at: string
-          id: string
-          is_active: boolean
-          text: string
-          user_id: string
-        }
-        Insert: {
-          campaign_id: string
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          text: string
-          user_id: string
-        }
-        Update: {
-          campaign_id?: string
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          text?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sample_captions_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "campaigns"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       captions: {
         Row: {
@@ -1083,87 +1042,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      recurring_schedules: {
-        Row: {
-          id: string
-          user_id: string
-          campaign_id: string | null
-          channel_id: string
-          platform: string
-          post_type: string
-          media_url: string
-          caption: string
-          share_to_feed: boolean
-          thumbnail_timestamp: number
-          privacy_level: string | null
-          allow_comments: boolean
-          allow_duet: boolean
-          allow_stitch: boolean
-          interval_hours: number
-          start_at: string | null
-          next_run_at: string
-          last_run_at: string | null
-          last_run_id: string | null
-          is_active: boolean
-          last_error: string | null
-          last_claimed_slot: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          campaign_id?: string | null
-          channel_id: string
-          platform: string
-          post_type: string
-          media_url: string
-          caption?: string
-          share_to_feed?: boolean
-          thumbnail_timestamp?: number
-          privacy_level?: string | null
-          allow_comments?: boolean
-          allow_duet?: boolean
-          allow_stitch?: boolean
-          interval_hours: number
-          start_at?: string | null
-          next_run_at: string
-          last_run_at?: string | null
-          last_run_id?: string | null
-          is_active?: boolean
-          last_error?: string | null
-          last_claimed_slot?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          campaign_id?: string | null
-          channel_id?: string
-          platform?: string
-          post_type?: string
-          media_url?: string
-          caption?: string
-          share_to_feed?: boolean
-          thumbnail_timestamp?: number
-          privacy_level?: string | null
-          allow_comments?: boolean
-          allow_duet?: boolean
-          allow_stitch?: boolean
-          interval_hours?: number
-          start_at?: string | null
-          next_run_at?: string
-          last_run_at?: string | null
-          last_run_id?: string | null
-          is_active?: boolean
-          last_error?: string | null
-          last_claimed_slot?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
       }
       schedules: {
         Row: {
