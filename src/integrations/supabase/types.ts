@@ -210,6 +210,85 @@ export type Database = {
           },
         ]
       }
+      campaign_channel_targets: {
+        Row: {
+          analysis_custom_query: string | null
+          analysis_n_value: number
+          analysis_scope: Database["public"]["Enums"]["analysis_scope"]
+          campaign_id: string
+          channel_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          last_analysis_at: string | null
+          last_error: string | null
+          last_post_id: string | null
+          last_published_at: string | null
+          last_refreshed_at: string | null
+          learning_state: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          analysis_custom_query?: string | null
+          analysis_n_value?: number
+          analysis_scope?: Database["public"]["Enums"]["analysis_scope"]
+          campaign_id: string
+          channel_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_analysis_at?: string | null
+          last_error?: string | null
+          last_post_id?: string | null
+          last_published_at?: string | null
+          last_refreshed_at?: string | null
+          learning_state?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          analysis_custom_query?: string | null
+          analysis_n_value?: number
+          analysis_scope?: Database["public"]["Enums"]["analysis_scope"]
+          campaign_id?: string
+          channel_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_analysis_at?: string | null
+          last_error?: string | null
+          last_post_id?: string | null
+          last_published_at?: string | null
+          last_refreshed_at?: string | null
+          learning_state?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_channel_targets_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_channel_targets_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_channel_targets_last_post_id_fkey"
+            columns: ["last_post_id"]
+            isOneToOne: false
+            referencedRelation: "published_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaigns: {
         Row: {
           channel_mode: string
@@ -230,11 +309,11 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          channel_mode?: string
           created_at?: string
           custom_objective?: string | null
           custom_scheduled_at?: string | null
           description?: string | null
-          channel_mode?: string
           id?: string
           name: string
           objective?: string
@@ -248,11 +327,11 @@ export type Database = {
           user_id: string
         }
         Update: {
+          channel_mode?: string
           created_at?: string
           custom_objective?: string | null
           custom_scheduled_at?: string | null
           description?: string | null
-          channel_mode?: string
           id?: string
           name?: string
           objective?: string
@@ -636,6 +715,113 @@ export type Database = {
             columns: ["channel_id"]
             isOneToOne: false
             referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      multi_channel_rounds: {
+        Row: {
+          campaign_id: string
+          channel_count: number
+          completed_count: number
+          created_at: string
+          error: string | null
+          finished_at: string | null
+          id: string
+          idempotency_key: string
+          queue_item_id: string
+          started_at: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          campaign_id: string
+          channel_count?: number
+          completed_count?: number
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          idempotency_key: string
+          queue_item_id: string
+          started_at?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          campaign_id?: string
+          channel_count?: number
+          completed_count?: number
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          idempotency_key?: string
+          queue_item_id?: string
+          started_at?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "multi_channel_rounds_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "multi_channel_rounds_queue_item_id_fkey"
+            columns: ["queue_item_id"]
+            isOneToOne: false
+            referencedRelation: "video_queue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      multi_channel_schedules: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          id: string
+          interval_hours: number
+          is_active: boolean
+          last_error: string | null
+          last_run_at: string | null
+          next_run_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          id?: string
+          interval_hours: number
+          is_active?: boolean
+          last_error?: string | null
+          last_run_at?: string | null
+          next_run_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          id?: string
+          interval_hours?: number
+          is_active?: boolean
+          last_error?: string | null
+          last_run_at?: string | null
+          next_run_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "multi_channel_schedules_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: true
+            referencedRelation: "campaigns"
             referencedColumns: ["id"]
           },
         ]
@@ -1513,81 +1699,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      },
-      campaign_channel_targets: {
-        Row: {
-          id: string
-          user_id: string
-          campaign_id: string
-          channel_id: string
-          analysis_scope: Database["public"]["Enums"]["analysis_scope"]
-          analysis_n_value: number
-          analysis_custom_query: string | null
-          is_active: boolean
-          last_analysis_at: string | null
-          last_refreshed_at: string | null
-          last_published_at: string | null
-          last_post_id: string | null
-          last_error: string | null
-          learning_state: Json
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          campaign_id: string
-          channel_id: string
-          analysis_scope?: Database["public"]["Enums"]["analysis_scope"]
-          analysis_n_value?: number
-          analysis_custom_query?: string | null
-          is_active?: boolean
-          last_analysis_at?: string | null
-          last_refreshed_at?: string | null
-          last_published_at?: string | null
-          last_post_id?: string | null
-          last_error?: string | null
-          learning_state?: Json
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          campaign_id?: string
-          channel_id?: string
-          analysis_scope?: Database["public"]["Enums"]["analysis_scope"]
-          analysis_n_value?: number
-          analysis_custom_query?: string | null
-          is_active?: boolean
-          last_analysis_at?: string | null
-          last_refreshed_at?: string | null
-          last_published_at?: string | null
-          last_post_id?: string | null
-          last_error?: string | null
-          learning_state?: Json
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      multi_channel_schedules: {
-        Row: { id: string; user_id: string; campaign_id: string; interval_hours: number; is_active: boolean; next_run_at: string; last_run_at: string | null; last_error: string | null; created_at: string; updated_at: string }
-        Insert: { id?: string; user_id: string; campaign_id: string; interval_hours: number; is_active?: boolean; next_run_at?: string; last_run_at?: string | null; last_error?: string | null; created_at?: string; updated_at?: string }
-        Update: { id?: string; user_id?: string; campaign_id?: string; interval_hours?: number; is_active?: boolean; next_run_at?: string; last_run_at?: string | null; last_error?: string | null; updated_at?: string }
-        Relationships: []
-      }
-      multi_channel_rounds: {
-        Row: { id: string; user_id: string; campaign_id: string; queue_item_id: string; idempotency_key: string; status: string; started_at: string; finished_at: string | null; error: string | null; channel_count: number; completed_count: number; created_at: string }
-        Insert: { id?: string; user_id: string; campaign_id: string; queue_item_id: string; idempotency_key: string; status?: string; started_at?: string; finished_at?: string | null; error?: string | null; channel_count?: number; completed_count?: number; created_at?: string }
-        Update: { id?: string; user_id?: string; campaign_id?: string; queue_item_id?: string; idempotency_key?: string; status?: string; finished_at?: string | null; error?: string | null; channel_count?: number; completed_count?: number }
-        Relationships: []
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      claim_multi_channel_queue_item: {
+        Args: { _campaign_id: string; _queue_item_id: string }
+        Returns: boolean
+      }
+      claim_multi_channel_schedule: {
+        Args: { _next_run_at: string; _now: string; _schedule_id: string }
+        Returns: boolean
+      }
       claim_recurring_schedule_slot: {
         Args: {
           _now?: string
@@ -1603,14 +1728,6 @@ export type Database = {
       }
       try_claim_channel_lock: {
         Args: { _channel_id: string; _run_id: string; _ttl_seconds: number }
-        Returns: boolean
-      }
-      claim_multi_channel_schedule: {
-        Args: { _schedule_id: string; _now: string; _next_run_at: string }
-        Returns: boolean
-      }
-      claim_multi_channel_queue_item: {
-        Args: { _queue_item_id: string; _campaign_id: string }
         Returns: boolean
       }
     }
