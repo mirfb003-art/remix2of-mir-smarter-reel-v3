@@ -14,7 +14,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Play, Pause, Square, Trash2, Plus, CircleCheck, RotateCcw, RefreshCw, Eraser } from "lucide-react";
+import { Play, Pause, Square, Trash2, Plus, CircleCheck, RotateCcw, RefreshCw, Eraser, Pencil, Check, X } from "lucide-react";
+import {
+  createSampleCaption,
+  deleteSampleCaption,
+  listSampleCaptions,
+  setSampleCaptionActive,
+  updateCampaignSampleCaptionSettings,
+  updateSampleCaption,
+} from "@/lib/sample-captions.functions";
 
 export const Route = createFileRoute("/_authenticated/campaigns")({ component: CampaignsPage });
 
@@ -38,10 +46,22 @@ function CampaignsPage() {
   const del = useServerFn(deleteCampaign);
   const reset = useServerFn(resetCampaign);
   const updatePublishing = useServerFn(updateCampaignPublishing);
+  const listSamples = useServerFn(listSampleCaptions);
+  const createSample = useServerFn(createSampleCaption);
+  const updateSample = useServerFn(updateSampleCaption);
+  const setSampleActive = useServerFn(setSampleCaptionActive);
+  const deleteSample = useServerFn(deleteSampleCaption);
+  const updateSampleSettings = useServerFn(updateCampaignSampleCaptionSettings);
   const qc = useQueryClient();
   const activeId = useActiveCampaignId();
 
   const { data: campaigns } = useQuery({ queryKey: ["campaigns"], queryFn: () => list() });
+  const activeCampaign = (campaigns ?? []).find((c) => c.id === activeId) as any;
+  const { data: samples } = useQuery({
+    queryKey: ["sample-captions", activeId],
+    queryFn: () => listSamples({ data: { campaign_id: activeId! } }),
+    enabled: Boolean(activeId),
+  });
 
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
@@ -51,6 +71,9 @@ function CampaignsPage() {
   const [publishMode, setPublishMode] = useState<PublishMode>("addToQueue");
   const [scheduledAt, setScheduledAt] = useState("");
   const [delayMinutes, setDelayMinutes] = useState<number | null>(null);
+  const [sampleText, setSampleText] = useState("");
+  const [editingSampleId, setEditingSampleId] = useState<string | null>(null);
+  const [editingSampleText, setEditingSampleText] = useState("");
 
   const create = useMutation({
     mutationFn: () => upsert({ data: {
@@ -89,6 +112,31 @@ function CampaignsPage() {
   const resetMut = useMutation({
     mutationFn: (p: { id: string; clear_queue?: boolean; clear_runs?: boolean; clear_memory?: boolean }) => reset({ data: p }),
     onSuccess: () => { toast.success("Campaign reset"); qc.invalidateQueries(); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+  const sampleSettingsMut = useMutation({
+    mutationFn: (v: { use_sample_captions: boolean; sample_caption_mode: "style_reference" | "learning_seed" }) => updateSampleSettings({ data: { campaign_id: activeId!, ...v } }),
+    onSuccess: () => { toast.success("Sample caption settings saved"); qc.invalidateQueries({ queryKey: ["campaigns"] }); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+  const createSampleMut = useMutation({
+    mutationFn: (text: string) => createSample({ data: { campaign_id: activeId!, text } }),
+    onSuccess: () => { setSampleText(""); toast.success("Sample caption added"); qc.invalidateQueries({ queryKey: ["sample-captions", activeId] }); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+  const updateSampleMut = useMutation({
+    mutationFn: (v: { id: string; text: string }) => updateSample({ data: v }),
+    onSuccess: () => { setEditingSampleId(null); setEditingSampleText(""); toast.success("Sample caption updated"); qc.invalidateQueries({ queryKey: ["sample-captions", activeId] }); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+  const activeSampleMut = useMutation({
+    mutationFn: (v: { id: string; is_active: boolean }) => setSampleActive({ data: v }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sample-captions", activeId] }),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+  const deleteSampleMut = useMutation({
+    mutationFn: (id: string) => deleteSample({ data: { id } }),
+    onSuccess: () => { toast.success("Sample caption deleted"); qc.invalidateQueries({ queryKey: ["sample-captions", activeId] }); },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
@@ -144,6 +192,55 @@ function CampaignsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {activeCampaign && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Sample Captions Library</CardTitle>
+            <CardDescription>Optional examples for this campaign. Samples are never used while the switch is off.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-4 rounded-md border p-3">
+              <div>
+                <div className="font-medium text-sm">Use sample captions</div>
+                <p className="text-xs text-muted-foreground">When enabled, up to five active samples are added to the caption workflow.</p>
+              </div>
+              <Switch checked={Boolean(activeCampaign.use_sample_captions)} onCheckedChange={(checked) => sampleSettingsMut.mutate({ use_sample_captions: checked, sample_caption_mode: activeCampaign.sample_caption_mode === "learning_seed" ? "learning_seed" : "style_reference" })} disabled={sampleSettingsMut.isPending} />
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label>Usage mode</Label>
+                <Select value={activeCampaign.sample_caption_mode === "learning_seed" ? "learning_seed" : "style_reference"} onValueChange={(value) => sampleSettingsMut.mutate({ use_sample_captions: Boolean(activeCampaign.use_sample_captions), sample_caption_mode: value as "style_reference" | "learning_seed" })} disabled={sampleSettingsMut.isPending}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="style_reference">Style reference</SelectItem><SelectItem value="learning_seed">Learning seed</SelectItem></SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Style reference guides tone. Learning seed is explicitly user-provided and not analytics-backed.</p>
+              </div>
+              <div className="space-y-1">
+                <Label>Add sample caption</Label>
+                <Textarea rows={3} maxLength={4000} value={sampleText} onChange={(e) => setSampleText(e.target.value)} placeholder="Paste a caption example…" />
+                <Button size="sm" onClick={() => createSampleMut.mutate(sampleText)} disabled={!sampleText.trim() || createSampleMut.isPending}>Add sample</Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {(samples ?? []).length === 0 ? <div className="text-sm text-muted-foreground">No sample captions yet.</div> : (samples ?? []).map((sample: any) => (
+                <div key={sample.id} className="flex flex-wrap items-start gap-3 rounded-md border p-3">
+                  <Switch checked={sample.is_active} onCheckedChange={(checked) => activeSampleMut.mutate({ id: sample.id, is_active: checked })} aria-label="Toggle sample caption" />
+                  <div className="min-w-0 flex-1">
+                    {editingSampleId === sample.id ? <Textarea rows={3} maxLength={4000} value={editingSampleText} onChange={(e) => setEditingSampleText(e.target.value)} /> : <p className={`whitespace-pre-wrap text-sm ${sample.is_active ? "" : "text-muted-foreground line-through"}`}>{sample.text}</p>}
+                    <div className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">{sample.is_active ? "Active" : "Inactive"}</div>
+                  </div>
+                  {editingSampleId === sample.id ? (
+                    <div className="flex gap-1"><Button size="icon" variant="ghost" title="Save sample caption" onClick={() => updateSampleMut.mutate({ id: sample.id, text: editingSampleText })}><Check className="h-4 w-4" /></Button><Button size="icon" variant="ghost" title="Cancel edit" onClick={() => { setEditingSampleId(null); setEditingSampleText(""); }}><X className="h-4 w-4" /></Button></div>
+                  ) : (
+                    <div className="flex gap-1"><Button size="icon" variant="ghost" title="Edit sample caption" onClick={() => { setEditingSampleId(sample.id); setEditingSampleText(sample.text); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" title="Delete sample caption" onClick={() => deleteSampleMut.mutate(sample.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">

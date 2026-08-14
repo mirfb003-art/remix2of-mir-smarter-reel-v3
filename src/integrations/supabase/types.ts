@@ -221,9 +221,11 @@ export type Database = {
           objective: string
           publish_delay_minutes: number | null
           publish_mode: string
+          sample_caption_mode: string
           share_learning: boolean
           status: string
           updated_at: string
+          use_sample_captions: boolean
           user_id: string
         }
         Insert: {
@@ -236,9 +238,11 @@ export type Database = {
           objective?: string
           publish_delay_minutes?: number | null
           publish_mode?: string
+          sample_caption_mode?: string
           share_learning?: boolean
           status?: string
           updated_at?: string
+          use_sample_captions?: boolean
           user_id: string
         }
         Update: {
@@ -251,12 +255,49 @@ export type Database = {
           objective?: string
           publish_delay_minutes?: number | null
           publish_mode?: string
+          sample_caption_mode?: string
           share_learning?: boolean
           status?: string
           updated_at?: string
+          use_sample_captions?: boolean
           user_id?: string
         }
         Relationships: []
+      }
+      sample_captions: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          text: string
+          user_id: string
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          text: string
+          user_id: string
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          text?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sample_captions_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       captions: {
         Row: {

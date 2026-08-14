@@ -68,5 +68,6 @@ export async function purgeCampaignEverything(sb: Sb, campaignId: string) {
   await sb.from("schedules").delete().eq("campaign_id", campaignId);
   await sb.from("channels").update({ campaign_id: null, active_run_id: null, lock_expires_at: null }).eq("campaign_id", campaignId);
   await sb.from("ai_settings").delete().eq("campaign_id", campaignId);
+  await sb.from("sample_captions").delete().eq("campaign_id", campaignId);
   await sb.from("buffer_credentials").delete().eq("campaign_id", campaignId);
 }

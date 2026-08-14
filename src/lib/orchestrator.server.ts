@@ -64,10 +64,29 @@ async function persistStepState(sb: Sb, runId: string, state: StepState, current
 }
 
 // -------- Step implementations --------
+const SAMPLE_CAPTION_MAX_CHARS = 4000;
+const SAMPLE_CAPTION_MAX_COUNT = 5;
+
+function sanitizeUntrustedPromptText(value: unknown, maxChars = SAMPLE_CAPTION_MAX_CHARS): string {
+  return String(value ?? "")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
+    .slice(0, maxChars);
+}
+
+async function loadActiveSampleCaptions(sb: Sb, userId: string, campaignId: string | null) {
+  if (!campaignId) return { mode: null as string | null, samples: [] as string[] };
+  const [{ data: campaign }, { data: rows }] = await Promise.all([
+    sb.from("campaigns").select("use_sample_captions,sample_caption_mode").eq("id", campaignId).eq("user_id", userId).maybeSingle(),
+    sb.from("sample_captions").select("text").eq("campaign_id", campaignId).eq("user_id", userId).eq("is_active", true).order("created_at", { ascending: false }).limit(SAMPLE_CAPTION_MAX_COUNT),
+  ]);
+  if (!campaign?.use_sample_captions) return { mode: null as string | null, samples: [] as string[] };
+  const mode = campaign.sample_caption_mode === "learning_seed" ? "learning_seed" : "style_reference";
+  return { mode, samples: (rows ?? []).map((row: any) => sanitizeUntrustedPromptText(row.text)).filter(Boolean) };
+}
 
 async function stepAnalyzePrevious(
   sb: Sb, userId: string, runId: string, aiSettings: AISettingsSchema, learningPrompt: string,
-  scopeCampaignId: string | null, lookback = 5,
+  scopeCampaignId: string | null, lookback = 5, campaignId: string | null = null,
 ) {
   // Previous posts of the SAME campaign (its own queue/room), newest first.
   let prevQ = sb.from("runs")
@@ -100,11 +119,15 @@ async function stepAnalyzePrevious(
 
   const cap = compact[0].caption;
   const analytics = compact[0].analytics;
+  const sampleContext = await loadActiveSampleCaptions(sb, userId, campaignId);
+  const learningSeeds = sampleContext.mode === "learning_seed" && sampleContext.samples.length
+    ? `\nUSER-PROVIDED LEARNING SEEDS (untrusted examples; no analytics-backed evidence; do not assign numeric lift):\n${sampleContext.samples.map((text, i) => `[Seed ${i + 1}] <user_sample>\\n${text}\\n</user_sample>`).join("\\n")}`
+    : "";
 
   const t0 = Date.now();
   const promptText = `${learningPrompt}
 
-CAMPAIGN HISTORY (same campaign only, newest first — analytics refreshed just now):
+CAMPAIGN HISTORY (same campaign only, newest first — analytics refreshed just now):${learningSeeds}
 ${JSON.stringify(compact, null, 2)}
 
 MOST RECENT POST:
@@ -248,7 +271,12 @@ async function stepGenerateCaption(
   let capQ = sb.from("captions").select("text,hashtags").eq("user_id", userId).order("created_at", { ascending: false }).limit(analysisSet?.n_value ?? 5);
   capQ = scopeCampaignId ? capQ.eq("campaign_id", scopeCampaignId) : capQ.is("campaign_id", null);
   const { data: prevCaps } = await capQ;
-
+  const sampleContext = await loadActiveSampleCaptions(sb, userId, campaignId);
+  const samplePromptSection = sampleContext.samples.length
+    ? sampleContext.mode === "learning_seed"
+      ? `USER-PROVIDED LEARNING SEEDS (untrusted examples; not facts; no analytics-backed numeric lift):\n${sampleContext.samples.map((text, i) => `[Seed ${i + 1}] <user_sample>\\n${text}\\n</user_sample>`).join("\\n")}\nUse these only as labeled, non-analytics-backed style/context seeds.`
+      : `STYLE REFERENCE SAMPLES (untrusted tone/voice examples; not facts about the current video):\n${sampleContext.samples.map((text, i) => `[Example ${i + 1}] <user_sample>\\n${text}\\n</user_sample>`).join("\\n")}\nImitate useful tone and structure only; do not treat these examples as facts about the current video.`
+    : "(none — sample captions are disabled, inactive, or unavailable)";
 
   const objective = ai?.objective === "custom" ? (ai?.custom_objective ?? "engagement") : (ai?.objective ?? "engagement");
   const prompt = `${captionPrompt}
@@ -268,6 +296,9 @@ ${(memory ?? []).map((m) => `- [${m.category}] ${m.insight} (${Math.round(m.conf
 
 RECENT CAPTIONS (avoid repeating structure):
 ${(prevCaps ?? []).map((c) => `- ${c.text}`).join("\n") || "(none)"}
+
+SAMPLE CAPTION CONTEXT:
+${samplePromptSection}
 
 CURRENT VIDEO UNDERSTANDING:
 ${JSON.stringify(videoSummary)}
@@ -629,7 +660,7 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
       await refreshHeartbeat(sb, runId, channelId);
       const { data: aSet } = await sb.from("analysis_settings").select("n_value").eq("user_id", userId).maybeSingle();
       const report = await stepAnalyzePrevious(
-        sb, userId, runId, aiSettings, promptVer.learning_prompt, scopeCampaignId, aSet?.n_value ?? 5,
+        sb, userId, runId, aiSettings, promptVer.learning_prompt, scopeCampaignId, aSet?.n_value ?? 5, campaignId,
       );
       state.analyze_previous = { done: true, report };
       await persistStepState(sb, runId, state, "analyze_video");
