@@ -221,9 +221,11 @@ export type Database = {
           objective: string
           publish_delay_minutes: number | null
           publish_mode: string
+          sample_caption_mode: string
           share_learning: boolean
           status: string
           updated_at: string
+          use_sample_captions: boolean
           user_id: string
         }
         Insert: {
@@ -236,9 +238,11 @@ export type Database = {
           objective?: string
           publish_delay_minutes?: number | null
           publish_mode?: string
+          sample_caption_mode?: string
           share_learning?: boolean
           status?: string
           updated_at?: string
+          use_sample_captions?: boolean
           user_id: string
         }
         Update: {
@@ -251,9 +255,11 @@ export type Database = {
           objective?: string
           publish_delay_minutes?: number | null
           publish_mode?: string
+          sample_caption_mode?: string
           share_learning?: boolean
           status?: string
           updated_at?: string
+          use_sample_captions?: boolean
           user_id?: string
         }
         Relationships: []
@@ -929,6 +935,109 @@ export type Database = {
           },
         ]
       }
+      recurring_schedules: {
+        Row: {
+          allow_comments: boolean
+          allow_duet: boolean
+          allow_stitch: boolean
+          campaign_id: string | null
+          caption: string
+          channel_id: string
+          created_at: string
+          id: string
+          interval_hours: number
+          is_active: boolean
+          last_claimed_slot: string | null
+          last_error: string | null
+          last_run_at: string | null
+          last_run_id: string | null
+          media_url: string
+          next_run_at: string
+          platform: string
+          post_type: string
+          privacy_level: string | null
+          share_to_feed: boolean
+          start_at: string | null
+          thumbnail_timestamp: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          allow_comments?: boolean
+          allow_duet?: boolean
+          allow_stitch?: boolean
+          campaign_id?: string | null
+          caption?: string
+          channel_id: string
+          created_at?: string
+          id?: string
+          interval_hours: number
+          is_active?: boolean
+          last_claimed_slot?: string | null
+          last_error?: string | null
+          last_run_at?: string | null
+          last_run_id?: string | null
+          media_url: string
+          next_run_at: string
+          platform: string
+          post_type: string
+          privacy_level?: string | null
+          share_to_feed?: boolean
+          start_at?: string | null
+          thumbnail_timestamp?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          allow_comments?: boolean
+          allow_duet?: boolean
+          allow_stitch?: boolean
+          campaign_id?: string | null
+          caption?: string
+          channel_id?: string
+          created_at?: string
+          id?: string
+          interval_hours?: number
+          is_active?: boolean
+          last_claimed_slot?: string | null
+          last_error?: string | null
+          last_run_at?: string | null
+          last_run_id?: string | null
+          media_url?: string
+          next_run_at?: string
+          platform?: string
+          post_type?: string
+          privacy_level?: string | null
+          share_to_feed?: boolean
+          start_at?: string | null
+          thumbnail_timestamp?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_schedules_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_schedules_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_schedules_last_run_id_fkey"
+            columns: ["last_run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       runs: {
         Row: {
           attempts: number
@@ -1039,6 +1148,41 @@ export type Database = {
             columns: ["strategy_id"]
             isOneToOne: false
             referencedRelation: "strategies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sample_captions: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          text: string
+          user_id: string
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          text: string
+          user_id: string
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          text?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sample_captions_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
             referencedColumns: ["id"]
           },
         ]
@@ -1372,6 +1516,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_recurring_schedule_slot: {
+        Args: {
+          _now?: string
+          _run_id: string
+          _schedule_id: string
+          _slot_key: string
+        }
+        Returns: boolean
+      }
       release_channel_lock: {
         Args: { _channel_id: string; _run_id: string }
         Returns: undefined
