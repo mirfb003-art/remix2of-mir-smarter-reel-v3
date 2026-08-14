@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Pause, Play, Repeat2, Trash2 } from "lucide-react";
+import { getBufferPlatformCapabilities } from "@/lib/buffer-platforms";
 
 export const Route = createFileRoute("/_authenticated/reel-formula")({ component: ReelFormulaPage });
 
@@ -71,6 +72,7 @@ function ReelFormulaPage() {
 
   const selectedChannel = (channels ?? []).find((channel: any) => channel.id === channelId) as any;
   const platform = (String(selectedChannel?.platform ?? "instagram").toLowerCase().includes("tiktok") ? "tiktok" : "instagram") as Platform;
+  const platformCapabilities = getBufferPlatformCapabilities(platform);
   const platformChannels = useMemo(() => (channels ?? []).filter((channel: any) => channel.active && !channel.missing_since), [channels]);
 
   useEffect(() => {
@@ -136,6 +138,7 @@ function ReelFormulaPage() {
           {selectedChannel ? (
             <div className="rounded-md border p-4 space-y-4">
               <div className="text-sm font-medium">{platform === "instagram" ? "Instagram settings" : "TikTok settings"}</div>
+              {platformCapabilities.metadataSupport === "limited" && <p className="text-xs text-warning">{platformCapabilities.notes} Unsupported platform controls are stored with the formula but are not sent to Buffer.</p>}
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-1"><Label>Post Type</Label><Select value={postType} onValueChange={setPostType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{platform === "instagram" ? <><SelectItem value="reel">Reel</SelectItem><SelectItem value="story">Story</SelectItem></> : <><SelectItem value="video">Video</SelectItem><SelectItem value="story">Story</SelectItem></>}</SelectContent></Select></div>
                 <div className="space-y-1"><Label>Media URL</Label><Input type="url" value={mediaUrl} onChange={(event) => setMediaUrl(event.target.value)} placeholder="https://…/video.mp4" /></div>
@@ -143,9 +146,9 @@ function ReelFormulaPage() {
               <div className="space-y-1"><Label>Caption</Label><Textarea value={caption} onChange={(event) => setCaption(event.target.value)} disabled={platform === "instagram" && postType === "story"} placeholder={platform === "instagram" && postType === "story" ? "Disabled for Instagram Stories" : "Caption to publish each time"} /></div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-1"><Label>Thumbnail Timestamp (seconds)</Label><Input type="number" min={0} step="0.1" value={thumbnailTimestamp} onChange={(event) => setThumbnailTimestamp(Number(event.target.value))} /></div>
-                {platform === "tiktok" && <div className="space-y-1"><Label>Privacy Level</Label><Select value={privacyLevel} onValueChange={setPrivacyLevel}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="PUBLIC">PUBLIC</SelectItem><SelectItem value="MUTUAL_FOLLOWS">MUTUAL_FOLLOWS</SelectItem><SelectItem value="SELF_ONLY">SELF_ONLY</SelectItem></SelectContent></Select></div>}
+                {platform === "tiktok" && <div className="space-y-1"><Label>Privacy Level</Label><Select value={privacyLevel} onValueChange={setPrivacyLevel} disabled={platformCapabilities.metadataSupport === "limited"}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="PUBLIC">PUBLIC</SelectItem><SelectItem value="MUTUAL_FOLLOWS">MUTUAL_FOLLOWS</SelectItem><SelectItem value="SELF_ONLY">SELF_ONLY</SelectItem></SelectContent></Select></div>}
               </div>
-              {platform === "instagram" ? <label className="flex items-center gap-2 text-sm"><Checkbox checked={shareToFeed && postType === "reel"} disabled={postType !== "reel"} onCheckedChange={(checked) => setShareToFeed(Boolean(checked))} />Share to Feed</label> : <div className="flex flex-wrap gap-5"><label className="flex items-center gap-2 text-sm"><Checkbox checked={allowComments} onCheckedChange={(checked) => setAllowComments(Boolean(checked))} />Allow Comments</label><label className="flex items-center gap-2 text-sm"><Checkbox checked={allowDuet} onCheckedChange={(checked) => setAllowDuet(Boolean(checked))} />Allow Duet</label><label className="flex items-center gap-2 text-sm"><Checkbox checked={allowStitch} onCheckedChange={(checked) => setAllowStitch(Boolean(checked))} />Allow Stitch</label></div>}
+              {platform === "instagram" ? <label className="flex items-center gap-2 text-sm"><Checkbox checked={shareToFeed && postType === "reel"} disabled={postType !== "reel"} onCheckedChange={(checked) => setShareToFeed(Boolean(checked))} />Share to Feed</label> : <div className="flex flex-wrap gap-5"><label className="flex items-center gap-2 text-sm"><Checkbox checked={allowComments} disabled={platformCapabilities.metadataSupport === "limited"} onCheckedChange={(checked) => setAllowComments(Boolean(checked))} />Allow Comments</label><label className="flex items-center gap-2 text-sm"><Checkbox checked={allowDuet} disabled={platformCapabilities.metadataSupport === "limited"} onCheckedChange={(checked) => setAllowDuet(Boolean(checked))} />Allow Duet</label><label className="flex items-center gap-2 text-sm"><Checkbox checked={allowStitch} disabled={platformCapabilities.metadataSupport === "limited"} onCheckedChange={(checked) => setAllowStitch(Boolean(checked))} />Allow Stitch</label></div>}
             </div>
           ) : <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">Connect and select a Buffer channel before configuring the formula.</div>}
 

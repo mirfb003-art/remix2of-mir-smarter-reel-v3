@@ -8,6 +8,8 @@ export interface BufferPostMetrics {
   raw: unknown;
 }
 export type PublishMode = "addToQueue" | "shareNow" | "customScheduled";
+export { getBufferPlatformCapabilities, normalizeBufferPlatform } from "./buffer-platforms";
+import { getBufferPlatformCapabilities, normalizeBufferPlatform } from "./buffer-platforms";
 
 export interface BufferPostProof {
   postId: string;
@@ -29,7 +31,7 @@ export interface BufferClient {
   createPost(input: {
     channelId: string; text: string; mediaUrl: string;
     mode?: PublishMode; dueAt?: string | null; platform?: string | null;
-    formula?: { postType?: string | null; shareToFeed?: boolean; thumbnailTimestamp?: number; privacyLevel?: string | null; allowComments?: boolean; allowDuet?: boolean; allowStitch?: boolean };
+    formula?: { postType?: string | null; shareToFeed?: boolean; thumbnailTimestamp?: number; privacyLevel?: string | null; allowComments?: boolean; allowDuet?: boolean; allowStitch?: boolean; firstComment?: string | null; isAiGenerated?: boolean };
   }): Promise<BufferPostProof>;
   getPost(id: string): Promise<{ analytics: Record<string, number>; raw: any } | null>;
   getPostProof(id: string): Promise<BufferPostProof | null>;
@@ -66,11 +68,19 @@ function isVideoUrl(url: string) {
   return /\.(mp4|mov|m4v|webm)(\?|$)/i.test(url) || /\/video\/upload\//i.test(url);
 }
 
-// Networks that require an explicit post type in metadata.
-function platformMetadata(platform: string | null | undefined, video: boolean): Record<string, unknown> | null {
-  const p = String(platform ?? "").toLowerCase();
-  if (p.includes("instagram")) return { instagram: { type: video ? "reel" : "post", shouldShareToFeed: true } };
-  if (p.includes("facebook")) return { facebook: { type: video ? "reel" : "post" } };
+// Only emit platform metadata whose shape is documented by Buffer.
+function platformMetadata(platform: string | null | undefined, video: boolean, formula?: Record<string, unknown> | null): Record<string, unknown> | null {
+  const p = normalizeBufferPlatform(platform);
+  const f = (formula ?? {}) as Record<string, unknown>;
+  if (p === "instagram") {
+    return { instagram: {
+      type: typeof f.postType === "string" ? f.postType : video ? "reel" : "post",
+      shouldShareToFeed: f.shareToFeed !== false,
+      ...(typeof f.firstComment === "string" && f.firstComment ? { firstComment: f.firstComment } : {}),
+      ...(typeof f.isAiGenerated === "boolean" ? { isAiGenerated: f.isAiGenerated } : {}),
+    } };
+  }
+  if (p === "facebook") return { facebook: { type: typeof f.postType === "string" ? f.postType : video ? "reel" : "post" } };
   return null;
 }
 
@@ -132,15 +142,16 @@ export function makeBufferClient(token: string, endpoint: string): BufferClient 
     },
     async verifySchema() {
       try {
-        const data = await gql<{ __schema: { mutationType: { fields: Array<{ name: string; args: Array<{ name: string }> }> } } }>(
-          `query { __schema { mutationType { fields { name args { name } } } } }`,
+        const data = await gql<{ __schema: { mutationType: { fields: Array<{ name: string }> } }; createPostInput: { inputFields: Array<{ name: string }> } | null }>(
+          `query { __schema { mutationType { fields { name } } } createPostInput: __type(name: "CreatePostInput") { inputFields { name } } }`,
         );
         const fields = data.__schema?.mutationType?.fields ?? [];
         const found = fields.find((f) => f.name === "createPost");
         if (!found) {
           return { ok: false, hasCreatePost: false, mutationName: null, inputFields: [], message: `No createPost mutation found. Available: ${fields.map((f) => f.name).slice(0, 15).join(", ")}` };
         }
-        return { ok: true, hasCreatePost: true, mutationName: "createPost", inputFields: found.args.map((a) => a.name), message: `Found mutation "createPost"` };
+        const inputFields = data.createPostInput?.inputFields?.map((field) => field.name) ?? [];
+        return { ok: true, hasCreatePost: true, mutationName: "createPost", inputFields, message: `Found mutation "createPost"${inputFields.length ? ` with input fields: ${inputFields.join(", ")}` : ""}` };
       } catch (e) {
         return { ok: false, hasCreatePost: false, mutationName: null, inputFields: [], message: e instanceof Error ? e.message : String(e) };
       }
@@ -155,10 +166,10 @@ export function makeBufferClient(token: string, endpoint: string): BufferClient 
         schedulingType: "automatic",
         needsApproval: false,
         // AssetInput is a OneOf union — video/image must be nested.
-        assets: [video ? { video: { url: mediaUrl } } : { image: { url: mediaUrl } }],
+        assets: [video ? { video: { url: mediaUrl, ...(formula?.thumbnailTimestamp != null && getBufferPlatformCapabilities(platform).supportsNestedThumbnailOffset ? { metadata: { thumbnailOffset: Math.round(formula.thumbnailTimestamp * 1000) } } : {}) } } : { image: { url: mediaUrl } }],
       };
-      const meta = platformMetadata(platform, video);
-      if (meta || formula) input.metadata = { ...(meta ?? {}), ...(formula ? { reelFormula: formula } : {}) };
+      const meta = platformMetadata(platform, video, formula);
+      if (meta) input.metadata = meta;
       if (mode === "customScheduled") {
         if (!dueAt) throw new Error("customScheduled publishing requires a due date");
         input.dueAt = new Date(dueAt).toISOString();

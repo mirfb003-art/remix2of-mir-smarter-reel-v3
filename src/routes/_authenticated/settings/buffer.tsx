@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { useState } from "react";
 import { useScopedCampaignId } from "@/components/campaign-context";
 import { Plug, Trash2, RefreshCw } from "lucide-react";
+import { getBufferPlatformCapabilities } from "@/lib/buffer-platforms";
 
 export const Route = createFileRoute("/_authenticated/settings/buffer")({ component: BufferSettings });
 
@@ -157,6 +158,7 @@ function BufferSettings() {
                       <div className="font-medium">{c.name}</div>
                       <div className={`text-xs ${missing ? "text-destructive/80" : "text-muted-foreground"}`}>
                         {c.platform} · {c.buffer_channel_id}
+                        <span className="block">Supports: {getBufferPlatformCapabilities(c.platform).supportedPostTypes.join(", ")} · {getBufferPlatformCapabilities(c.platform).metadataSupport} metadata</span>
                       </div>
                     </div>
                     {missing ? (
