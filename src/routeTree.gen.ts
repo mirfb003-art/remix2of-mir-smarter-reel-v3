@@ -9,58 +9,49 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AuthRouteImport } from './routes/auth'
-import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AuthenticatedSheetRouteImport } from './routes/_authenticated/sheet'
-import { Route as AuthenticatedQueueRouteImport } from './routes/_authenticated/queue'
-import { Route as AuthenticatedLearningRouteImport } from './routes/_authenticated/learning'
-import { Route as AuthenticatedInsightsRouteImport } from './routes/_authenticated/insights'
-import { Route as AuthenticatedGlobalDashboardRouteImport } from './routes/_authenticated/global-dashboard'
-import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedCampaignsRouteImport } from './routes/_authenticated/campaigns'
+import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedGlobalDashboardRouteImport } from './routes/_authenticated/global-dashboard'
+import { Route as AuthenticatedInsightsRouteImport } from './routes/_authenticated/insights'
+import { Route as AuthenticatedLearningRouteImport } from './routes/_authenticated/learning'
+import { Route as AuthenticatedQueueRouteImport } from './routes/_authenticated/queue'
+import { Route as AuthenticatedReelFormulaRouteImport } from './routes/_authenticated/reel-formula'
+import { Route as AuthenticatedSheetRouteImport } from './routes/_authenticated/sheet'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
-import { Route as AuthenticatedSettingsSchedulerRouteImport } from './routes/_authenticated/settings/scheduler'
-import { Route as AuthenticatedSettingsGeneralRouteImport } from './routes/_authenticated/settings/general'
-import { Route as AuthenticatedSettingsBufferRouteImport } from './routes/_authenticated/settings/buffer'
-import { Route as AuthenticatedSettingsAnalysisRouteImport } from './routes/_authenticated/settings/analysis'
 import { Route as AuthenticatedSettingsAiRouteImport } from './routes/_authenticated/settings/ai'
-import { Route as ApiPublicCronTickRouteImport } from './routes/api/public/cron/tick'
-import { Route as ApiPublicCronRecoverStaleRouteImport } from './routes/api/public/cron/recover-stale'
+import { Route as AuthenticatedSettingsAnalysisRouteImport } from './routes/_authenticated/settings/analysis'
+import { Route as AuthenticatedSettingsBufferRouteImport } from './routes/_authenticated/settings/buffer'
+import { Route as AuthenticatedSettingsGeneralRouteImport } from './routes/_authenticated/settings/general'
+import { Route as AuthenticatedSettingsSchedulerRouteImport } from './routes/_authenticated/settings/scheduler'
 import { Route as ApiPublicCronFetchAnalyticsRouteImport } from './routes/api/public/cron/fetch-analytics'
+import { Route as ApiPublicCronRecoverStaleRouteImport } from './routes/api/public/cron/recover-stale'
+import { Route as ApiPublicCronTickRouteImport } from './routes/api/public/cron/tick'
 
-const AuthRoute = AuthRouteImport.update({
-  id: '/auth',
-  path: '/auth',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedSheetRoute = AuthenticatedSheetRouteImport.update({
-  id: '/sheet',
-  path: '/sheet',
+const AuthenticatedCampaignsRoute = AuthenticatedCampaignsRouteImport.update({
+  id: '/campaigns',
+  path: '/campaigns',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedQueueRoute = AuthenticatedQueueRouteImport.update({
-  id: '/queue',
-  path: '/queue',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedLearningRoute = AuthenticatedLearningRouteImport.update({
-  id: '/learning',
-  path: '/learning',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedInsightsRoute = AuthenticatedInsightsRouteImport.update({
-  id: '/insights',
-  path: '/insights',
+const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedGlobalDashboardRoute =
@@ -69,14 +60,30 @@ const AuthenticatedGlobalDashboardRoute =
     path: '/global-dashboard',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
+const AuthenticatedInsightsRoute = AuthenticatedInsightsRouteImport.update({
+  id: '/insights',
+  path: '/insights',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedCampaignsRoute = AuthenticatedCampaignsRouteImport.update({
-  id: '/campaigns',
-  path: '/campaigns',
+const AuthenticatedLearningRoute = AuthenticatedLearningRouteImport.update({
+  id: '/learning',
+  path: '/learning',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedQueueRoute = AuthenticatedQueueRouteImport.update({
+  id: '/queue',
+  path: '/queue',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedReelFormulaRoute =
+  AuthenticatedReelFormulaRouteImport.update({
+    id: '/reel-formula',
+    path: '/reel-formula',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSheetRoute = AuthenticatedSheetRouteImport.update({
+  id: '/sheet',
+  path: '/sheet',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedSettingsIndexRoute =
@@ -85,16 +92,15 @@ const AuthenticatedSettingsIndexRoute =
     path: '/settings/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedSettingsSchedulerRoute =
-  AuthenticatedSettingsSchedulerRouteImport.update({
-    id: '/settings/scheduler',
-    path: '/settings/scheduler',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedSettingsGeneralRoute =
-  AuthenticatedSettingsGeneralRouteImport.update({
-    id: '/settings/general',
-    path: '/settings/general',
+const AuthenticatedSettingsAiRoute = AuthenticatedSettingsAiRouteImport.update({
+  id: '/settings/ai',
+  path: '/settings/ai',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedSettingsAnalysisRoute =
+  AuthenticatedSettingsAnalysisRouteImport.update({
+    id: '/settings/analysis',
+    path: '/settings/analysis',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedSettingsBufferRoute =
@@ -103,27 +109,17 @@ const AuthenticatedSettingsBufferRoute =
     path: '/settings/buffer',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedSettingsAnalysisRoute =
-  AuthenticatedSettingsAnalysisRouteImport.update({
-    id: '/settings/analysis',
-    path: '/settings/analysis',
+const AuthenticatedSettingsGeneralRoute =
+  AuthenticatedSettingsGeneralRouteImport.update({
+    id: '/settings/general',
+    path: '/settings/general',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedSettingsAiRoute = AuthenticatedSettingsAiRouteImport.update({
-  id: '/settings/ai',
-  path: '/settings/ai',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const ApiPublicCronTickRoute = ApiPublicCronTickRouteImport.update({
-  id: '/api/public/cron/tick',
-  path: '/api/public/cron/tick',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPublicCronRecoverStaleRoute =
-  ApiPublicCronRecoverStaleRouteImport.update({
-    id: '/api/public/cron/recover-stale',
-    path: '/api/public/cron/recover-stale',
-    getParentRoute: () => rootRouteImport,
+const AuthenticatedSettingsSchedulerRoute =
+  AuthenticatedSettingsSchedulerRouteImport.update({
+    id: '/settings/scheduler',
+    path: '/settings/scheduler',
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const ApiPublicCronFetchAnalyticsRoute =
   ApiPublicCronFetchAnalyticsRouteImport.update({
@@ -131,6 +127,17 @@ const ApiPublicCronFetchAnalyticsRoute =
     path: '/api/public/cron/fetch-analytics',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicCronRecoverStaleRoute =
+  ApiPublicCronRecoverStaleRouteImport.update({
+    id: '/api/public/cron/recover-stale',
+    path: '/api/public/cron/recover-stale',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicCronTickRoute = ApiPublicCronTickRouteImport.update({
+  id: '/api/public/cron/tick',
+  path: '/api/public/cron/tick',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -141,6 +148,7 @@ export interface FileRoutesByFullPath {
   '/insights': typeof AuthenticatedInsightsRoute
   '/learning': typeof AuthenticatedLearningRoute
   '/queue': typeof AuthenticatedQueueRoute
+  '/reel-formula': typeof AuthenticatedReelFormulaRoute
   '/sheet': typeof AuthenticatedSheetRoute
   '/settings/ai': typeof AuthenticatedSettingsAiRoute
   '/settings/analysis': typeof AuthenticatedSettingsAnalysisRoute
@@ -161,6 +169,7 @@ export interface FileRoutesByTo {
   '/insights': typeof AuthenticatedInsightsRoute
   '/learning': typeof AuthenticatedLearningRoute
   '/queue': typeof AuthenticatedQueueRoute
+  '/reel-formula': typeof AuthenticatedReelFormulaRoute
   '/sheet': typeof AuthenticatedSheetRoute
   '/settings/ai': typeof AuthenticatedSettingsAiRoute
   '/settings/analysis': typeof AuthenticatedSettingsAnalysisRoute
@@ -183,6 +192,7 @@ export interface FileRoutesById {
   '/_authenticated/insights': typeof AuthenticatedInsightsRoute
   '/_authenticated/learning': typeof AuthenticatedLearningRoute
   '/_authenticated/queue': typeof AuthenticatedQueueRoute
+  '/_authenticated/reel-formula': typeof AuthenticatedReelFormulaRoute
   '/_authenticated/sheet': typeof AuthenticatedSheetRoute
   '/_authenticated/settings/ai': typeof AuthenticatedSettingsAiRoute
   '/_authenticated/settings/analysis': typeof AuthenticatedSettingsAnalysisRoute
@@ -205,6 +215,7 @@ export interface FileRouteTypes {
     | '/insights'
     | '/learning'
     | '/queue'
+    | '/reel-formula'
     | '/sheet'
     | '/settings/ai'
     | '/settings/analysis'
@@ -225,6 +236,7 @@ export interface FileRouteTypes {
     | '/insights'
     | '/learning'
     | '/queue'
+    | '/reel-formula'
     | '/sheet'
     | '/settings/ai'
     | '/settings/analysis'
@@ -246,6 +258,7 @@ export interface FileRouteTypes {
     | '/_authenticated/insights'
     | '/_authenticated/learning'
     | '/_authenticated/queue'
+    | '/_authenticated/reel-formula'
     | '/_authenticated/sheet'
     | '/_authenticated/settings/ai'
     | '/_authenticated/settings/analysis'
@@ -269,11 +282,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/auth': {
-      id: '/auth'
-      path: '/auth'
-      fullPath: '/auth'
-      preLoaderRoute: typeof AuthRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -283,46 +296,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/sheet': {
-      id: '/_authenticated/sheet'
-      path: '/sheet'
-      fullPath: '/sheet'
-      preLoaderRoute: typeof AuthenticatedSheetRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/queue': {
-      id: '/_authenticated/queue'
-      path: '/queue'
-      fullPath: '/queue'
-      preLoaderRoute: typeof AuthenticatedQueueRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/learning': {
-      id: '/_authenticated/learning'
-      path: '/learning'
-      fullPath: '/learning'
-      preLoaderRoute: typeof AuthenticatedLearningRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/insights': {
-      id: '/_authenticated/insights'
-      path: '/insights'
-      fullPath: '/insights'
-      preLoaderRoute: typeof AuthenticatedInsightsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/global-dashboard': {
-      id: '/_authenticated/global-dashboard'
-      path: '/global-dashboard'
-      fullPath: '/global-dashboard'
-      preLoaderRoute: typeof AuthenticatedGlobalDashboardRouteImport
+    '/_authenticated/campaigns': {
+      id: '/_authenticated/campaigns'
+      path: '/campaigns'
+      fullPath: '/campaigns'
+      preLoaderRoute: typeof AuthenticatedCampaignsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/dashboard': {
@@ -332,11 +317,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/campaigns': {
-      id: '/_authenticated/campaigns'
-      path: '/campaigns'
-      fullPath: '/campaigns'
-      preLoaderRoute: typeof AuthenticatedCampaignsRouteImport
+    '/_authenticated/global-dashboard': {
+      id: '/_authenticated/global-dashboard'
+      path: '/global-dashboard'
+      fullPath: '/global-dashboard'
+      preLoaderRoute: typeof AuthenticatedGlobalDashboardRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/insights': {
+      id: '/_authenticated/insights'
+      path: '/insights'
+      fullPath: '/insights'
+      preLoaderRoute: typeof AuthenticatedInsightsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/learning': {
+      id: '/_authenticated/learning'
+      path: '/learning'
+      fullPath: '/learning'
+      preLoaderRoute: typeof AuthenticatedLearningRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/queue': {
+      id: '/_authenticated/queue'
+      path: '/queue'
+      fullPath: '/queue'
+      preLoaderRoute: typeof AuthenticatedQueueRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/reel-formula': {
+      id: '/_authenticated/reel-formula'
+      path: '/reel-formula'
+      fullPath: '/reel-formula'
+      preLoaderRoute: typeof AuthenticatedReelFormulaRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/sheet': {
+      id: '/_authenticated/sheet'
+      path: '/sheet'
+      fullPath: '/sheet'
+      preLoaderRoute: typeof AuthenticatedSheetRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/settings/': {
@@ -346,25 +366,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/settings/scheduler': {
-      id: '/_authenticated/settings/scheduler'
-      path: '/settings/scheduler'
-      fullPath: '/settings/scheduler'
-      preLoaderRoute: typeof AuthenticatedSettingsSchedulerRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/settings/general': {
-      id: '/_authenticated/settings/general'
-      path: '/settings/general'
-      fullPath: '/settings/general'
-      preLoaderRoute: typeof AuthenticatedSettingsGeneralRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/settings/buffer': {
-      id: '/_authenticated/settings/buffer'
-      path: '/settings/buffer'
-      fullPath: '/settings/buffer'
-      preLoaderRoute: typeof AuthenticatedSettingsBufferRouteImport
+    '/_authenticated/settings/ai': {
+      id: '/_authenticated/settings/ai'
+      path: '/settings/ai'
+      fullPath: '/settings/ai'
+      preLoaderRoute: typeof AuthenticatedSettingsAiRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/settings/analysis': {
@@ -374,18 +380,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsAnalysisRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/settings/ai': {
-      id: '/_authenticated/settings/ai'
-      path: '/settings/ai'
-      fullPath: '/settings/ai'
-      preLoaderRoute: typeof AuthenticatedSettingsAiRouteImport
+    '/_authenticated/settings/buffer': {
+      id: '/_authenticated/settings/buffer'
+      path: '/settings/buffer'
+      fullPath: '/settings/buffer'
+      preLoaderRoute: typeof AuthenticatedSettingsBufferRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/api/public/cron/tick': {
-      id: '/api/public/cron/tick'
-      path: '/api/public/cron/tick'
-      fullPath: '/api/public/cron/tick'
-      preLoaderRoute: typeof ApiPublicCronTickRouteImport
+    '/_authenticated/settings/general': {
+      id: '/_authenticated/settings/general'
+      path: '/settings/general'
+      fullPath: '/settings/general'
+      preLoaderRoute: typeof AuthenticatedSettingsGeneralRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/settings/scheduler': {
+      id: '/_authenticated/settings/scheduler'
+      path: '/settings/scheduler'
+      fullPath: '/settings/scheduler'
+      preLoaderRoute: typeof AuthenticatedSettingsSchedulerRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/api/public/cron/fetch-analytics': {
+      id: '/api/public/cron/fetch-analytics'
+      path: '/api/public/cron/fetch-analytics'
+      fullPath: '/api/public/cron/fetch-analytics'
+      preLoaderRoute: typeof ApiPublicCronFetchAnalyticsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/cron/recover-stale': {
@@ -395,11 +415,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCronRecoverStaleRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/cron/fetch-analytics': {
-      id: '/api/public/cron/fetch-analytics'
-      path: '/api/public/cron/fetch-analytics'
-      fullPath: '/api/public/cron/fetch-analytics'
-      preLoaderRoute: typeof ApiPublicCronFetchAnalyticsRouteImport
+    '/api/public/cron/tick': {
+      id: '/api/public/cron/tick'
+      path: '/api/public/cron/tick'
+      fullPath: '/api/public/cron/tick'
+      preLoaderRoute: typeof ApiPublicCronTickRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -412,6 +432,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedInsightsRoute: typeof AuthenticatedInsightsRoute
   AuthenticatedLearningRoute: typeof AuthenticatedLearningRoute
   AuthenticatedQueueRoute: typeof AuthenticatedQueueRoute
+  AuthenticatedReelFormulaRoute: typeof AuthenticatedReelFormulaRoute
   AuthenticatedSheetRoute: typeof AuthenticatedSheetRoute
   AuthenticatedSettingsAiRoute: typeof AuthenticatedSettingsAiRoute
   AuthenticatedSettingsAnalysisRoute: typeof AuthenticatedSettingsAnalysisRoute
@@ -428,6 +449,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedInsightsRoute: AuthenticatedInsightsRoute,
   AuthenticatedLearningRoute: AuthenticatedLearningRoute,
   AuthenticatedQueueRoute: AuthenticatedQueueRoute,
+  AuthenticatedReelFormulaRoute: AuthenticatedReelFormulaRoute,
   AuthenticatedSheetRoute: AuthenticatedSheetRoute,
   AuthenticatedSettingsAiRoute: AuthenticatedSettingsAiRoute,
   AuthenticatedSettingsAnalysisRoute: AuthenticatedSettingsAnalysisRoute,

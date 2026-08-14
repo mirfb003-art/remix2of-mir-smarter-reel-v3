@@ -29,6 +29,7 @@ export interface BufferClient {
   createPost(input: {
     channelId: string; text: string; mediaUrl: string;
     mode?: PublishMode; dueAt?: string | null; platform?: string | null;
+    formula?: { postType?: string | null; shareToFeed?: boolean; thumbnailTimestamp?: number; privacyLevel?: string | null; allowComments?: boolean; allowDuet?: boolean; allowStitch?: boolean };
   }): Promise<BufferPostProof>;
   getPost(id: string): Promise<{ analytics: Record<string, number>; raw: any } | null>;
   getPostProof(id: string): Promise<BufferPostProof | null>;
@@ -145,7 +146,7 @@ export function makeBufferClient(token: string, endpoint: string): BufferClient 
       }
     },
 
-    async createPost({ channelId, text, mediaUrl, mode = "addToQueue", dueAt = null, platform = null }) {
+    async createPost({ channelId, text, mediaUrl, mode = "addToQueue", dueAt = null, platform = null, formula = null }) {
       const video = isVideoUrl(mediaUrl);
       const input: Record<string, unknown> = {
         channelId,
@@ -157,7 +158,7 @@ export function makeBufferClient(token: string, endpoint: string): BufferClient 
         assets: [video ? { video: { url: mediaUrl } } : { image: { url: mediaUrl } }],
       };
       const meta = platformMetadata(platform, video);
-      if (meta) input.metadata = meta;
+      if (meta || formula) input.metadata = { ...(meta ?? {}), ...(formula ? { reelFormula: formula } : {}) };
       if (mode === "customScheduled") {
         if (!dueAt) throw new Error("customScheduled publishing requires a due date");
         input.dueAt = new Date(dueAt).toISOString();

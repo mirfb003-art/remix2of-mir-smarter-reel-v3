@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   LayoutDashboard, ListVideo, Table2, Brain, LogOut, Sparkles, TrendingUp,
-  Cable, Wand2, Search, Clock, SlidersHorizontal, FolderKanban, Menu, Globe,
+  Cable, Wand2, Search, Clock, SlidersHorizontal, FolderKanban, Menu, Globe, Repeat2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ const nav = [
   { to: "/sheet", label: "Sheet", icon: Table2 },
   { to: "/learning", label: "Learning", icon: Brain },
   { to: "/insights", label: "Insights", icon: TrendingUp },
+  { to: "/reel-formula", label: "1 Reel Formula", icon: Repeat2 },
 ];
 
 const settingsNav = [

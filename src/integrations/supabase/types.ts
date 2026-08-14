@@ -1084,6 +1084,87 @@ export type Database = {
           },
         ]
       }
+      recurring_schedules: {
+        Row: {
+          id: string
+          user_id: string
+          campaign_id: string | null
+          channel_id: string
+          platform: string
+          post_type: string
+          media_url: string
+          caption: string
+          share_to_feed: boolean
+          thumbnail_timestamp: number
+          privacy_level: string | null
+          allow_comments: boolean
+          allow_duet: boolean
+          allow_stitch: boolean
+          interval_hours: number
+          start_at: string | null
+          next_run_at: string
+          last_run_at: string | null
+          last_run_id: string | null
+          is_active: boolean
+          last_error: string | null
+          last_claimed_slot: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          campaign_id?: string | null
+          channel_id: string
+          platform: string
+          post_type: string
+          media_url: string
+          caption?: string
+          share_to_feed?: boolean
+          thumbnail_timestamp?: number
+          privacy_level?: string | null
+          allow_comments?: boolean
+          allow_duet?: boolean
+          allow_stitch?: boolean
+          interval_hours: number
+          start_at?: string | null
+          next_run_at: string
+          last_run_at?: string | null
+          last_run_id?: string | null
+          is_active?: boolean
+          last_error?: string | null
+          last_claimed_slot?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          campaign_id?: string | null
+          channel_id?: string
+          platform?: string
+          post_type?: string
+          media_url?: string
+          caption?: string
+          share_to_feed?: boolean
+          thumbnail_timestamp?: number
+          privacy_level?: string | null
+          allow_comments?: boolean
+          allow_duet?: boolean
+          allow_stitch?: boolean
+          interval_hours?: number
+          start_at?: string | null
+          next_run_at?: string
+          last_run_at?: string | null
+          last_run_id?: string | null
+          is_active?: boolean
+          last_error?: string | null
+          last_claimed_slot?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       schedules: {
         Row: {
           active: boolean

@@ -53,7 +53,28 @@ export const Route = createFileRoute("/api/public/cron/tick")({
           }
           await supabaseAdmin.from("schedules").update({ next_run_at: next, last_run_at: now }).eq("id", s.id);
         }
-        return Response.json({ processed: results.length, results });
+        const { data: formulaDue } = await supabaseAdmin
+          .from("recurring_schedules")
+          .select("id,user_id,campaign_id,next_run_at,is_active,campaigns(status)")
+          .eq("is_active", true)
+          .lte("next_run_at", now)
+          .limit(20);
+        const formulaResults: Array<{ id: string; ok: boolean; error?: string; skipped?: string }> = [];
+        for (const schedule of formulaDue ?? []) {
+          const campaignStatus = (schedule as any).campaigns?.status;
+          if (campaignStatus && campaignStatus !== "active") {
+            formulaResults.push({ id: schedule.id, ok: false, error: `campaign ${campaignStatus}` });
+            continue;
+          }
+          try {
+            const { runReelFormulaSchedule } = await import("@/lib/reel-formula.server");
+            const result = await runReelFormulaSchedule(supabaseAdmin as any, schedule.id, schedule.next_run_at ?? now);
+            formulaResults.push({ id: schedule.id, ok: true, skipped: result.skipped ? result.reason : undefined });
+          } catch (e) {
+            formulaResults.push({ id: schedule.id, ok: false, error: e instanceof Error ? e.message : String(e) });
+          }
+        }
+        return Response.json({ processed: results.length + formulaResults.length, results, formulaResults });
       },
     },
   },
