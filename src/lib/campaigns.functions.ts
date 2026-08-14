@@ -7,7 +7,7 @@ export const listCampaigns = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data, error } = await context.supabase
       .from("campaigns")
-      .select("id,name,description,objective,custom_objective,status,share_learning,publish_mode,custom_scheduled_at,publish_delay_minutes,use_sample_captions,sample_caption_mode,created_at,updated_at")
+      .select("id,name,description,objective,custom_objective,status,share_learning,publish_mode,custom_scheduled_at,publish_delay_minutes,use_sample_captions,sample_caption_mode,channel_mode,created_at,updated_at")
       .order("created_at", { ascending: true });
     if (error) throw new Error(error.message);
     return data ?? [];
@@ -25,6 +25,7 @@ const upsertSchema = z.object({
   publish_delay_minutes: z.number().int().min(1).max(10080).nullable().optional(),
   use_sample_captions: z.boolean().optional(),
   sample_caption_mode: z.enum(["style_reference", "learning_seed"]).optional(),
+  channel_mode: z.enum(["single", "multi"]).optional(),
 });
 
 export const upsertCampaign = createServerFn({ method: "POST" })
@@ -43,6 +44,7 @@ export const upsertCampaign = createServerFn({ method: "POST" })
         share_learning: data.share_learning ?? false,
         ...(data.use_sample_captions === undefined ? {} : { use_sample_captions: data.use_sample_captions }),
         ...(data.sample_caption_mode === undefined ? {} : { sample_caption_mode: data.sample_caption_mode }),
+        ...(data.channel_mode === undefined ? {} : { channel_mode: data.channel_mode }),
         ...publishFields,
       }).eq("id", data.id);
       if (error) throw new Error(error.message);
@@ -52,6 +54,7 @@ export const upsertCampaign = createServerFn({ method: "POST" })
       user_id: context.userId, name: data.name, description: data.description ?? null,
       objective: data.objective, custom_objective: data.custom_objective ?? null,
       share_learning: data.share_learning ?? false,
+      channel_mode: data.channel_mode ?? "single",
       ...publishFields,
     }).select("id").single();
     if (error) throw new Error(error.message);

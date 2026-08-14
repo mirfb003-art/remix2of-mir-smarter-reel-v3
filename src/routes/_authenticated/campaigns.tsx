@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { useState } from "react";
 import { Play, Pause, Square, Trash2, Plus, CircleCheck, RotateCcw, RefreshCw, Eraser, Pencil, Check, X } from "lucide-react";
+import { MultiChannelCampaignPanel } from "@/components/multi-channel-campaign-panel";
 import {
   createSampleCaption,
   deleteSampleCaption,
@@ -66,6 +67,7 @@ function CampaignsPage() {
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [objective, setObjective] = useState("engagement");
+  const [channelMode, setChannelMode] = useState<"single" | "multi">("single");
   const [customObj, setCustomObj] = useState("");
   const [shareLearning, setShareLearning] = useState(false);
   const [publishMode, setPublishMode] = useState<PublishMode>("addToQueue");
@@ -79,6 +81,7 @@ function CampaignsPage() {
     mutationFn: () => upsert({ data: {
       name, description: desc || null, objective,
       custom_objective: objective === "custom" ? customObj : null,
+      channel_mode: channelMode,
       share_learning: shareLearning,
       publish_mode: publishMode,
       custom_scheduled_at: publishMode === "customScheduled" ? localInputToIso(scheduledAt) : null,
@@ -86,7 +89,7 @@ function CampaignsPage() {
     } }),
     onSuccess: (r) => {
       toast.success("Campaign created");
-      setName(""); setDesc(""); setCustomObj("");
+      setName(""); setDesc(""); setCustomObj(""); setChannelMode("single");
       setActiveCampaignId(r.id);
       qc.invalidateQueries({ queryKey: ["campaigns"] });
     },
@@ -174,6 +177,13 @@ function CampaignsPage() {
               <Input value={customObj} onChange={(e) => setCustomObj(e.target.value)} placeholder="Describe the goal" />
             </div>
           )}
+          <div className="space-y-1"><Label>Channel mode</Label>
+            <Select value={channelMode} onValueChange={(value) => setChannelMode(value as "single" | "multi")}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="single">Single-channel (existing behavior)</SelectItem><SelectItem value="multi">Multi-channel</SelectItem></SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Single-channel keeps the current campaign flow unchanged. Multi-channel lets one queue round publish to multiple selected Buffer channels.</p>
+          </div>
           <div className="md:col-span-2">
             <PublishModeFields
               mode={publishMode} onModeChange={setPublishMode}
@@ -192,6 +202,8 @@ function CampaignsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {activeCampaign && <MultiChannelCampaignPanel campaignId={activeCampaign.id} campaignMode={activeCampaign.channel_mode ?? "single"} />}
 
       {activeCampaign && (
         <Card>

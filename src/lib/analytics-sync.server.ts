@@ -26,6 +26,7 @@ export async function refreshChannelAnalytics(
   );
   const buffer = makeBufferClient(cred.api_token, cred.graphql_endpoint || "https://graphql.buffer.com");
   const nodes = await buffer.getChannelPostsMetrics((ch as any).buffer_channel_id, limit);
+  if (campaignId) await sb.from("campaign_channel_targets").update({ last_refreshed_at: new Date().toISOString() }).eq("campaign_id", campaignId).eq("channel_id", channelId);
   if (!nodes.length) return { fetched: 0, imported: 0, updated: 0 };
 
   const stampCampaign = campaignId ?? (ch as any).campaign_id ?? null;
@@ -111,8 +112,17 @@ export async function refreshCampaignAnalytics(
   sb: Sb,
   opts: { userId: string; campaignId: string | null; limit?: number },
 ): Promise<{ channels: number; fetched: number; imported: number; updated: number }> {
+  let channelIds: string[] | null = null;
+  if (opts.campaignId) {
+    const { data: campaign } = await sb.from("campaigns").select("channel_mode").eq("id", opts.campaignId).maybeSingle();
+    if (campaign?.channel_mode === "multi") {
+      const { data: targets } = await sb.from("campaign_channel_targets").select("channel_id").eq("user_id", opts.userId).eq("campaign_id", opts.campaignId).eq("is_active", true);
+      channelIds = (targets ?? []).map((target: any) => target.channel_id);
+    }
+  }
   let q = sb.from("channels").select("id").eq("user_id", opts.userId).is("missing_since", null);
-  q = opts.campaignId ? (q as any).or(`campaign_id.eq.${opts.campaignId},campaign_id.is.null`) : (q as any).is("campaign_id", null);
+  if (channelIds) q = channelIds.length ? (q as any).in("id", channelIds) : (q as any).eq("id", "00000000-0000-0000-0000-000000000000");
+  else q = opts.campaignId ? (q as any).or(`campaign_id.eq.${opts.campaignId},campaign_id.is.null`) : (q as any).is("campaign_id", null);
   const { data: chans } = await q;
   let fetched = 0, imported = 0, updated = 0;
   for (const c of chans ?? []) {

@@ -10,7 +10,8 @@ export const listRuns = createServerFn({ method: "POST" })
       .from("runs")
       .select(`
         id, run_number, status, strategy_used, next_strategy, error, duration_ms,
-        started_at, finished_at, campaign_id,
+        started_at, finished_at, campaign_id, channel_id,
+        channels(name,platform),
         video_queue!runs_queue_item_id_fkey(cloudinary_url),
         video_analyses(summary, topic),
         captions(text, hashtags),
@@ -87,7 +88,7 @@ export const listImportedPosts = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     let q = context.supabase
       .from("published_posts")
-      .select("id,buffer_post_id,permalink,posted_at,buffer_status,due_at,verified_at,platform,text_content,source,campaign_id,post_analytics(views,likes,comments,shares,saves,reach,impressions,fetched_at)")
+      .select("id,buffer_post_id,permalink,posted_at,buffer_status,due_at,verified_at,platform,text_content,source,campaign_id,channel_id,channels(name,platform),post_analytics(views,likes,comments,shares,saves,reach,impressions,fetched_at)")
       .eq("source", "buffer_import")
       .order("posted_at", { ascending: false })
       .limit(300);

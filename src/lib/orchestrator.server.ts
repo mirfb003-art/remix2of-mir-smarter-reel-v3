@@ -86,7 +86,7 @@ async function loadActiveSampleCaptions(sb: Sb, userId: string, campaignId: stri
 
 async function stepAnalyzePrevious(
   sb: Sb, userId: string, runId: string, aiSettings: AISettingsSchema, learningPrompt: string,
-  scopeCampaignId: string | null, lookback = 5, campaignId: string | null = null,
+  scopeCampaignId: string | null, lookback = 5, campaignId: string | null = null, channelId: string | null = null,
 ) {
   // Previous posts of the SAME campaign (its own queue/room), newest first.
   let prevQ = sb.from("runs")
@@ -98,6 +98,7 @@ async function stepAnalyzePrevious(
     .eq("user_id", userId).eq("status", "complete").neq("id", runId)
     .order("started_at", { ascending: false }).limit(Math.max(1, Math.min(lookback, 10)));
   prevQ = scopeCampaignId ? prevQ.eq("campaign_id", scopeCampaignId) : prevQ.is("campaign_id", null);
+  if (channelId) prevQ = prevQ.eq("channel_id", channelId);
   const { data: prevRuns } = await prevQ;
   const history = (prevRuns ?? []).filter((r: any) => r.captions?.[0]);
   if (!history.length) return null;
@@ -251,7 +252,7 @@ async function stepAnalyzeVideo(sb: Sb, userId: string, runId: string, url: stri
 
 async function stepGenerateCaption(
   sb: Sb, userId: string, runId: string, aiSettings: AISettingsSchema, videoSummary: any, captionPrompt: string,
-  strategy: StrategyDecision | null, scopeCampaignId: string | null = null, campaignId: string | null = null,
+  strategy: StrategyDecision | null, scopeCampaignId: string | null = null, campaignId: string | null = null, channelId: string | null = null, lookbackOverride: number | null = null,
 ) {
   const memQ = sb.from("memory_insights").select("category,insight,confidence").eq("user_id", userId).eq("active", true).order("confidence", { ascending: false }).limit(15);
   const [aiRes, analysisRes, memoryRes] = await Promise.all([
@@ -268,8 +269,13 @@ async function stepGenerateCaption(
   }
   const analysisSet = analysisRes.data;
   const memory = memoryRes.data;
-  let capQ = sb.from("captions").select("text,hashtags").eq("user_id", userId).order("created_at", { ascending: false }).limit(analysisSet?.n_value ?? 5);
+  let capQ = sb.from("captions").select("text,hashtags").eq("user_id", userId).order("created_at", { ascending: false }).limit(lookbackOverride ?? analysisSet?.n_value ?? 5);
   capQ = scopeCampaignId ? capQ.eq("campaign_id", scopeCampaignId) : capQ.is("campaign_id", null);
+  if (channelId) {
+    const { data: channelRuns } = await sb.from("runs").select("id").eq("user_id", userId).eq("channel_id", channelId).eq("status", "complete").order("started_at", { ascending: false }).limit(lookbackOverride ?? analysisSet?.n_value ?? 5);
+    const runIds = (channelRuns ?? []).map((run: any) => run.id);
+    capQ = runIds.length ? capQ.in("run_id", runIds) : capQ.eq("run_id", "00000000-0000-0000-0000-000000000000");
+  }
   const { data: prevCaps } = await capQ;
   const sampleContext = await loadActiveSampleCaptions(sb, userId, campaignId);
   const samplePromptSection = sampleContext.samples.length
@@ -470,6 +476,40 @@ async function stepPublish(
 
 // -------- Main entry --------
 
+export async function executeQueueItemForChannel({
+  supabase: sb, userId, campaignId, channelId, queueItem, analysisLookback,
+}: { supabase: Sb; userId: string; campaignId: string; channelId: string; queueItem: { id: string; cloudinary_url: string }; analysisLookback?: number | null }) {
+  const { data: channel } = await sb.from("channels").select("*, buffer_credentials(*)").eq("id", channelId).eq("user_id", userId).maybeSingle();
+  if (!channel) throw new Error("Selected channel not found");
+  const idemKey = makeIdempotencyKey(["multi", queueItem.id, channelId]);
+  const { data: existing } = await sb.from("runs").select("*, channels(*, buffer_credentials(*))").eq("user_id", userId).eq("idempotency_key", idemKey).maybeSingle();
+  if (existing?.status === "complete") return { runId: existing.id, postId: (existing.step_state as any)?.publish?.postId, alreadyComplete: true };
+
+  let run: any = existing;
+  if (!run) {
+    let lastRunQ = sb.from("runs").select("run_number").eq("user_id", userId).eq("campaign_id", campaignId).order("run_number", { ascending: false }).limit(1);
+    const { data: lastRun } = await lastRunQ.maybeSingle();
+    const promptVer = await getActivePromptVersion(sb, userId);
+    const { data: created, error } = await sb.from("runs").insert({
+      user_id: userId, channel_id: channelId, queue_item_id: queueItem.id, campaign_id: campaignId,
+      run_number: (lastRun?.run_number ?? 0) + 1, status: "analyzing", idempotency_key: idemKey,
+      current_step: "analyze_previous", step_state: {} as never, heartbeat_at: new Date().toISOString(), attempts: 1,
+      prompt_version_id: promptVer.id === "builtin-default" ? null : promptVer.id,
+    }).select("*").single();
+    if (error || !created) throw new Error(error?.message ?? "Failed to create multi-channel run");
+    run = created;
+  } else {
+    await sb.from("runs").update({ status: "analyzing", error: null, attempts: (run.attempts ?? 0) + 1, heartbeat_at: new Date().toISOString() }).eq("id", run.id);
+  }
+
+  const gotLock = await acquireChannelLock(sb, channelId, run.id);
+  if (!gotLock) throw new Error(`Channel ${channelId} is already being processed.`);
+  run.queue_url = queueItem.cloudinary_url;
+  return await executeSteps(sb, userId, run, channel, (run.step_state as StepState) ?? {}, {
+    channelOnly: true, finalizeQueue: false, requeueQueueOnFailure: false, analysisLookback: analysisLookback ?? null,
+  });
+}
+
 export async function runOrchestrator({
   supabase: sb, userId, channelId, resumeRunId, campaignId: campaignIdOverride,
 }: { supabase: Sb; userId: string; channelId: string; resumeRunId?: string; campaignId?: string | null }) {
@@ -601,7 +641,9 @@ export async function runOrchestrator({
   return await executeSteps(sb, userId, freshRun as any, channel, initialState);
 }
 
-async function executeSteps(sb: Sb, userId: string, run: any, channel: any, state: StepState) {
+type ExecutionOptions = { channelOnly?: boolean; finalizeQueue?: boolean; requeueQueueOnFailure?: boolean; analysisLookback?: number | null };
+
+async function executeSteps(sb: Sb, userId: string, run: any, channel: any, state: StepState, options: ExecutionOptions = {}) {
   const runId = run.id;
   const channelId = channel.id;
   const campaignId: string | null = run.campaign_id ?? null;
@@ -647,8 +689,10 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
 
     // Step: refresh this campaign's post analytics so the Sheet + learning use live numbers.
     try {
-      const { refreshCampaignAnalytics } = await import("./analytics-sync.server");
-      const res = await refreshCampaignAnalytics(sb, { userId, campaignId });
+      const analytics = await import("./analytics-sync.server");
+      const res = options.channelOnly
+        ? await analytics.refreshChannelAnalytics(sb, { userId, channelId, campaignId })
+        : await analytics.refreshCampaignAnalytics(sb, { userId, campaignId });
       await audit(sb, { userId, runId, eventType: "analytics.refreshed", module: "orchestrator", status: "success", payload: res });
     } catch (e) {
       await log(sb, userId, runId, "warn", "orchestrator", `Analytics refresh skipped: ${e instanceof Error ? e.message : String(e)}`);
@@ -659,8 +703,9 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
       await persistStepState(sb, runId, state, "analyze_previous");
       await refreshHeartbeat(sb, runId, channelId);
       const { data: aSet } = await sb.from("analysis_settings").select("n_value").eq("user_id", userId).maybeSingle();
+      const lookback = options.analysisLookback ?? aSet?.n_value ?? 5;
       const report = await stepAnalyzePrevious(
-        sb, userId, runId, aiSettings, promptVer.learning_prompt, scopeCampaignId, aSet?.n_value ?? 5, campaignId,
+        sb, userId, runId, aiSettings, promptVer.learning_prompt, scopeCampaignId, lookback, campaignId, options.channelOnly ? channelId : null,
       );
       state.analyze_previous = { done: true, report };
       await persistStepState(sb, runId, state, "analyze_video");
@@ -717,7 +762,7 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
     if (!state.generate_caption?.done) {
       await sb.from("runs").update({ status: "generating" }).eq("id", runId);
       await refreshHeartbeat(sb, runId, channelId);
-      const caption = await stepGenerateCaption(sb, userId, runId, aiSettings, state.analyze_video!.summary, promptVer.caption_prompt, state.strategy?.decision ?? null, scopeCampaignId, campaignId);
+      const caption = await stepGenerateCaption(sb, userId, runId, aiSettings, state.analyze_video!.summary, promptVer.caption_prompt, state.strategy?.decision ?? null, scopeCampaignId, campaignId, options.channelOnly ? channelId : null, options.analysisLookback);
       state.generate_caption = { done: true, caption };
       await persistStepState(sb, runId, state, "publish");
     }
@@ -734,7 +779,7 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
     }
 
     // Step: finalize
-    if (queueItemId) {
+    if (queueItemId && options.finalizeQueue !== false) {
       await sb.from("video_queue").update({
         status: "done", processed_at: new Date().toISOString(), error: null,
       }).eq("id", queueItemId);
@@ -760,7 +805,7 @@ async function executeSteps(sb: Sb, userId: string, run: any, channel: any, stat
     }).eq("id", runId);
 
     // Dead-letter or requeue based on max_attempts.
-    if (queueItemId) {
+    if (queueItemId && options.requeueQueueOnFailure !== false) {
       const { data: q } = await sb.from("video_queue").select("attempts, max_attempts").eq("id", queueItemId).maybeSingle();
       const attempts = q?.attempts ?? 1;
       const maxAttempts = q?.max_attempts ?? 3;

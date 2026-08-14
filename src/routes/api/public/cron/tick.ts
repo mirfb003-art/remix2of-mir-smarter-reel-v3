@@ -74,7 +74,9 @@ export const Route = createFileRoute("/api/public/cron/tick")({
             formulaResults.push({ id: schedule.id, ok: false, error: e instanceof Error ? e.message : String(e) });
           }
         }
-        return Response.json({ processed: results.length + formulaResults.length, results, formulaResults });
+        const { runDueMultiChannelSchedules } = await import("@/lib/multi-channel.server");
+        const multiChannelResults = await runDueMultiChannelSchedules(supabaseAdmin as any);
+        return Response.json({ processed: results.length + formulaResults.length + multiChannelResults.length, results, formulaResults, multiChannelResults });
       },
     },
   },

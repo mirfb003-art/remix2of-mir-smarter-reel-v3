@@ -16,6 +16,8 @@ export const Route = createFileRoute("/_authenticated/sheet")({ component: Sheet
 
 type Row = {
   run_number: number;
+  channel: string;
+  platform: string;
   status: string;
   strategy_used: string | null;
   next_strategy: string | null;
@@ -49,6 +51,8 @@ function flatten(runs: any[]): Row[] {
     const lr = r.learning_reports?.[0] ?? {};
     return {
       run_number: r.run_number,
+      channel: r.channels?.name ?? "Unassigned",
+      platform: r.channels?.platform ?? r.published_posts?.[0]?.platform ?? "",
       status: r.status,
       strategy_used: r.strategy_used,
       next_strategy: r.next_strategy,
@@ -80,6 +84,8 @@ function flattenImported(posts: any[]): Row[] {
     const an = p.post_analytics?.[0] ?? {};
     return {
       run_number: 0,
+      channel: p.channels?.name ?? "Unassigned",
+      platform: p.channels?.platform ?? p.platform ?? "",
       status: p.buffer_status ?? "sent",
       strategy_used: null, next_strategy: null, error: null, duration_ms: null,
       started_at: p.posted_at ?? p.due_at ?? "",
@@ -103,6 +109,8 @@ function flattenImported(posts: any[]): Row[] {
 
 const cols: Array<{ key: keyof Row; label: string }> = [
   { key: "run_number", label: "Run" },
+  { key: "channel", label: "Channel" },
+  { key: "platform", label: "Platform" },
   { key: "started_at", label: "Date" },
   { key: "url", label: "URL" },
   { key: "topic", label: "Topic" },
