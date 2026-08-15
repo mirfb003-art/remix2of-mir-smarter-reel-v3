@@ -76,7 +76,9 @@ export const Route = createFileRoute("/api/public/cron/tick")({
         }
         const { runDueMultiChannelSchedules } = await import("@/lib/multi-channel.server");
         const multiChannelResults = await runDueMultiChannelSchedules(supabaseAdmin as any);
-        return Response.json({ processed: results.length + formulaResults.length + multiChannelResults.length, results, formulaResults, multiChannelResults });
+        const { runDueSheetModeSheets } = await import("@/lib/sheet-mode.server");
+        const sheetModeResults = await runDueSheetModeSheets(supabaseAdmin as any);
+        return Response.json({ processed: results.length + formulaResults.length + multiChannelResults.length + sheetModeResults.length, results, formulaResults, multiChannelResults, sheetModeResults });
       },
     },
   },

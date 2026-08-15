@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { runSheetModeCycle } from "./sheet-mode.server";
 
 const sheetId = z.string().uuid();
 const channelId = z.string().uuid();
@@ -510,6 +511,14 @@ export const retryFailedSheetModeRows = createServerFn({ method: "POST" })
     const ids = (rows ?? []).map((row) => row.id);
     if (ids.length) { const result = await context.supabase.from("sheet_mode_row_channel_status").update({ status: "F", last_error: null }).in("row_id", ids).not("last_error", "is", null); if (result.error) throw new Error(result.error.message); }
     return { reset: ids.length };
+  });
+
+export const publishNextSheetMode = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ sheet_id: sheetId }).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertSheetOwner(context.supabase, context.userId, data.sheet_id);
+    return runSheetModeCycle(context.supabase, data.sheet_id, "manual", `manual-${crypto.randomUUID()}`);
   });
 
 export const bulkUpdateSheetModeCells = createServerFn({ method: "POST" })

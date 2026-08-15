@@ -51,6 +51,7 @@ import {
   setSheetModeEnabled,
   updateSheetModeChannelCell,
   updateSheetModeRow,
+  publishNextSheetMode,
 } from "@/lib/sheet-mode.functions";
 
 export const Route = createFileRoute("/_authenticated/sheet-mode")({ component: SheetModePage });
@@ -228,7 +229,7 @@ function SheetModePage() {
           ...settings,
           schedule_label: settings.schedule_label || null,
           selection_rule: settings.selection_rule as any,
-          targets: channelIds.map((channel_id) => ({ channel_id, backfill_applied: false })),
+          targets: channelIds.map((channel_id) => ({ channel_id, backfill_applied: true })),
         },
       }),
     onSuccess: (r) => {
@@ -464,6 +465,7 @@ function SheetGrid({
     updateRow = useServerFn(updateSheetModeRow),
     deleteRow = useServerFn(deleteSheetModeRow),
     updateCell = useServerFn(updateSheetModeChannelCell),
+    publishNext = useServerFn(publishNextSheetMode),
     importRows = useServerFn(importSheetModeRows),
     removeEmpty = useServerFn(removeEmptySheetModeRows),
     removeDuplicates = useServerFn(removeDuplicateSheetModeRows),
@@ -471,6 +473,7 @@ function SheetGrid({
     bulk = useServerFn(bulkUpdateSheetModeCells);
   const fileRef = useRef<HTMLInputElement>(null);
   const [newChannel, setNewChannel] = useState("");
+  const [backfillNewChannel, setBackfillNewChannel] = useState(false);
   const [preview, setPreview] = useState<{
     rows: ImportRow[];
     mapping: string;
@@ -567,7 +570,16 @@ function SheetGrid({
           >
             <Settings2 className="h-4 w-4 mr-2" /> Settings
           </Button>
-          <Button onClick={() => toast.info("Manual publishing is wired in Part E.")}>
+          <Button
+            onClick={() =>
+              run(
+                publishNext({ data: { sheet_id: sheet.id } }).then((result) => {
+                  toast.success(`Publish cycle complete: ${result.succeeded ?? 0} succeeded, ${result.failed ?? 0} failed`);
+                  return result;
+                }),
+              )
+            }
+          >
             <Play className="h-4 w-4 mr-2" /> Publish next
           </Button>
         </div>
@@ -860,6 +872,15 @@ function SheetGrid({
               </button>
             </Badge>
           ))}
+          <div className="flex items-center gap-2 text-sm">
+            <input
+              id="sheet-mode-backfill"
+              type="checkbox"
+              checked={backfillNewChannel}
+              onChange={(event) => setBackfillNewChannel(event.target.checked)}
+            />
+            <Label htmlFor="sheet-mode-backfill">Backfill existing rows</Label>
+          </div>
           <Select
             value={newChannel}
             onValueChange={(v) => {
@@ -868,7 +889,7 @@ function SheetGrid({
                 addTarget({
                   data: {
                     sheet_id: sheet.id,
-                    targets: [{ channel_id: v, backfill_applied: false }],
+                    targets: [{ channel_id: v, backfill_applied: backfillNewChannel }],
                   },
                 }),
                 "Channel added",
