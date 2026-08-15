@@ -1,4 +1,5 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { SupabaseClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { audit, makeIdempotencyKey } from "./reliability.server";
 import { executeQueueItemForChannel } from "./orchestrator.server";
 
@@ -37,7 +38,7 @@ async function findOrClaimQueueItem(sb: Sb, campaignId: string, roundId?: string
   }
   const { data: candidate } = await sb.from("video_queue").select("id,cloudinary_url,status").eq("campaign_id", campaignId).eq("status", "pending").order("position", { ascending: true }).limit(1).maybeSingle();
   if (!candidate) throw new Error("Campaign queue is empty.");
-  const { data: claimed, error: claimError } = await sb.rpc("claim_multi_channel_queue_item", { _queue_item_id: candidate.id, _campaign_id: campaignId });
+  const { data: claimed, error: claimError } = await supabaseAdmin.rpc("claim_multi_channel_queue_item", { _queue_item_id: candidate.id, _campaign_id: campaignId });
   if (claimError) throw new Error(`multi-channel queue claim: ${claimError.message}`);
   if (!claimed) throw new Error("Another multi-channel round claimed the next queue item.");
   return { round: null, queueItem: { ...candidate, status: "processing" } };
@@ -123,7 +124,7 @@ export async function runDueMultiChannelSchedules(sb: Sb) {
   for (const schedule of schedules ?? []) {
     const now = new Date();
     const next = new Date(now.getTime() + Number(schedule.interval_hours) * 3600000);
-    const { data: claimed, error } = await sb.rpc("claim_multi_channel_schedule", { _schedule_id: schedule.id, _now: now.toISOString(), _next_run_at: next.toISOString() });
+    const { data: claimed, error } = await supabaseAdmin.rpc("claim_multi_channel_schedule", { _schedule_id: schedule.id, _now: now.toISOString(), _next_run_at: next.toISOString() });
     if (error || !claimed) continue;
     try {
       results.push(await runMultiChannelRound(sb, schedule.user_id, schedule.campaign_id, "scheduled"));
