@@ -1491,6 +1491,7 @@ export type Database = {
           buffer_connection_id: string
           channel_id: string
           channel_label: string
+          customization: Json
           id: string
           is_active: boolean
           platform: string
@@ -1503,6 +1504,7 @@ export type Database = {
           buffer_connection_id: string
           channel_id: string
           channel_label: string
+          customization?: Json
           id?: string
           is_active?: boolean
           platform: string
@@ -1515,6 +1517,7 @@ export type Database = {
           buffer_connection_id?: string
           channel_id?: string
           channel_label?: string
+          customization?: Json
           id?: string
           is_active?: boolean
           platform?: string
@@ -1650,9 +1653,12 @@ export type Database = {
           after_publish_save_time: boolean
           after_publish_save_url: boolean
           created_at: string
+          custom_schedule_at: string | null
+          custom_schedule_offset_minutes: number | null
           id: string
           is_enabled: boolean
           name: string
+          publish_mode: string
           retry_failed: boolean
           rows_per_run: number
           schedule_label: string | null
@@ -1666,9 +1672,12 @@ export type Database = {
           after_publish_save_time?: boolean
           after_publish_save_url?: boolean
           created_at?: string
+          custom_schedule_at?: string | null
+          custom_schedule_offset_minutes?: number | null
           id?: string
           is_enabled?: boolean
           name: string
+          publish_mode?: string
           retry_failed?: boolean
           rows_per_run?: number
           schedule_label?: string | null
@@ -1682,9 +1691,12 @@ export type Database = {
           after_publish_save_time?: boolean
           after_publish_save_url?: boolean
           created_at?: string
+          custom_schedule_at?: string | null
+          custom_schedule_offset_minutes?: number | null
           id?: string
           is_enabled?: boolean
           name?: string
+          publish_mode?: string
           retry_failed?: boolean
           rows_per_run?: number
           schedule_label?: string | null
