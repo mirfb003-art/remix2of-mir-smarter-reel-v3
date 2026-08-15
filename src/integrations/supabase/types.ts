@@ -1915,10 +1915,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      claim_sheet_mode_channel: {
-        Args: { _channel_target_id: string; _now: string; _row_id: string; _stale_before: string }
-        Returns: boolean
-      }
       claim_multi_channel_queue_item: {
         Args: { _campaign_id: string; _queue_item_id: string }
         Returns: boolean
