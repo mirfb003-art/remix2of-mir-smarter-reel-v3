@@ -20,6 +20,9 @@ const selectionRule = z.enum([
 
 const sheetSettingsSchema = z.object({
   name: z.string().trim().min(1).max(160),
+  publish_mode: z.enum(["shareNow", "addToQueue", "customScheduled"]).default("shareNow"),
+  custom_schedule_offset_minutes: z.number().int().min(0).max(60 * 24 * 30).nullable().default(null),
+  custom_schedule_at: z.string().datetime().nullable().default(null),
   rows_per_run: z.number().int().min(1).max(500).default(1),
   schedule_label: z.string().trim().max(200).nullable().optional(),
   selection_rule: selectionRule.default("first_ready"),
@@ -127,7 +130,7 @@ export const listSheetModeWorkspace = createServerFn({ method: "GET" })
     const [sheetsResult, channelsResult] = await Promise.all([
       context.supabase
         .from("sheet_mode_sheets")
-        .select("id,name,rows_per_run,schedule_label,selection_rule,after_publish_mark_status,after_publish_save_post_id,after_publish_save_time,after_publish_save_url,retry_failed,is_enabled,created_at,updated_at")
+        .select("id,name,rows_per_run,schedule_label,publish_mode,custom_schedule_offset_minutes,custom_schedule_at,selection_rule,after_publish_mark_status,after_publish_save_post_id,after_publish_save_time,after_publish_save_url,retry_failed,is_enabled,created_at,updated_at")
         .order("created_at", { ascending: false }),
       context.supabase
         .from("channels")
@@ -175,6 +178,9 @@ export const createSheetModeSheet = createServerFn({ method: "POST" })
         name: data.name,
         rows_per_run: data.rows_per_run,
         schedule_label: data.schedule_label ?? null,
+        publish_mode: data.publish_mode,
+        custom_schedule_offset_minutes: data.custom_schedule_offset_minutes ?? null,
+        custom_schedule_at: data.custom_schedule_at ?? null,
         selection_rule: data.selection_rule,
         after_publish_mark_status: data.after_publish_mark_status,
         after_publish_save_post_id: data.after_publish_save_post_id,
@@ -219,6 +225,9 @@ export const updateSheetModeSheet = createServerFn({ method: "POST" })
         name: data.name,
         rows_per_run: data.rows_per_run,
         schedule_label: data.schedule_label ?? null,
+        publish_mode: data.publish_mode,
+        custom_schedule_offset_minutes: data.custom_schedule_offset_minutes ?? null,
+        custom_schedule_at: data.custom_schedule_at ?? null,
         selection_rule: data.selection_rule,
         after_publish_mark_status: data.after_publish_mark_status,
         after_publish_save_post_id: data.after_publish_save_post_id,

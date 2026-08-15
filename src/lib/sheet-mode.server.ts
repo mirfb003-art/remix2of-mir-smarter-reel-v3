@@ -9,6 +9,9 @@ type Sheet = {
   user_id: string;
   name: string;
   rows_per_run: number;
+  publish_mode: "shareNow" | "addToQueue" | "customScheduled";
+  custom_schedule_offset_minutes: number | null;
+  custom_schedule_at: string | null;
   selection_rule: string;
   after_publish_mark_status: boolean;
   after_publish_save_post_id: boolean;
@@ -60,6 +63,14 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function resolveSheetDueAt(sheet: Sheet) {
+  if (sheet.publish_mode !== "customScheduled") return null;
+  if (sheet.custom_schedule_at) return sheet.custom_schedule_at;
+  if (sheet.custom_schedule_offset_minutes != null)
+    return new Date(Date.now() + sheet.custom_schedule_offset_minutes * 60_000).toISOString();
+  throw new Error("Custom schedule requires a date/time or relative offset");
+}
+
 async function nextRunNumber(sb: Sb, userId: string) {
   const { data } = await sb
     .from("runs")
@@ -94,6 +105,19 @@ async function loadTargets(sb: Sb, sheetId: string): Promise<Target[]> {
     ...target,
     channel: Array.isArray(target.channels) ? target.channels[0] : target.channels,
   })) as Target[];
+}
+
+async function ensureChannelStatusRows(sb: Sb, sheetId: string, targets: Target[]) {
+  if (!targets.length) return;
+  const { data: rows, error: rowError } = await sb.from("sheet_mode_rows").select("id").eq("sheet_id", sheetId);
+  if (rowError) throw new Error(rowError.message);
+  const pairs = (rows ?? []).flatMap((row: { id: string }) => targets.map((target) => ({ row_id: row.id, channel_target_id: target.id, status: "F" })));
+  if (!pairs.length) return;
+  const { error } = await sb.from("sheet_mode_row_channel_status").upsert(pairs, {
+    onConflict: "row_id,channel_target_id",
+    ignoreDuplicates: true,
+  });
+  if (error) throw new Error(error.message);
 }
 
 async function loadRows(sb: Sb, sheetId: string): Promise<Row[]> {
@@ -240,7 +264,8 @@ async function publishChannel(
           channelId: channel.buffer_channel_id,
           text: row.caption,
           mediaUrl: row.video_url,
-          mode: "shareNow",
+          mode: sheet.publish_mode,
+          dueAt: resolveSheetDueAt(sheet),
           platform: target.platform,
           formula: { isAiGenerated: false },
         });
@@ -340,6 +365,7 @@ export async function runSheetModeCycle(
   if (run.status === "complete" && reason === "scheduled")
     return { sheetId, runId: run.id, skipped: true, reason: "already_complete" };
   const targets = await loadTargets(sb, sheet.id);
+  await ensureChannelStatusRows(sb, sheet.id, targets);
   const rows = sortRows(
     (await loadRows(sb, sheet.id)).filter((row) => eligible(row, targets)),
     sheet.selection_rule,
@@ -415,7 +441,16 @@ export async function runSheetModeCycle(
       status: errors.length ? "error" : "success",
       payload: { sheet_id: sheet.id, attempted, succeeded, failed, errors },
     });
-    return { sheetId: sheet.id, runId: run.id, attempted, succeeded, failed, errors };
+    return {
+      sheetId: sheet.id,
+      runId: run.id,
+      attempted,
+      succeeded,
+      failed,
+      errors,
+      rowsConsidered: rows.length,
+      noEligiblePendingChannel: rows.length === 0,
+    };
   } catch (error) {
     const message = errorMessage(error);
     await sb

@@ -57,6 +57,9 @@ import {
 export const Route = createFileRoute("/_authenticated/sheet-mode")({ component: SheetModePage });
 type Settings = {
   name: string;
+  publish_mode: "shareNow" | "addToQueue" | "customScheduled";
+  custom_schedule_offset_minutes: number | null;
+  custom_schedule_at: string | null;
   rows_per_run: number;
   schedule_label: string;
   selection_rule: string;
@@ -98,6 +101,9 @@ type ImportRow = {
 type Column = "caption" | "video_url" | "status" | "published_url";
 const DEFAULT: Settings = {
   name: "",
+  publish_mode: "shareNow",
+  custom_schedule_offset_minutes: null,
+  custom_schedule_at: null,
   rows_per_run: 1,
   schedule_label: "",
   selection_rule: "first_ready",
@@ -151,40 +157,37 @@ function parseDelimited(text: string) {
     );
 }
 function detect(matrix: unknown[][]) {
-  const first = (matrix[0] ?? []).map((v) =>
-    String(v ?? "")
-      .trim()
-      .toLowerCase(),
-  );
-  const captionAliases = ["caption", "text", "description", "copy"];
-  const urlAliases = ["url", "video_url", "link", "media_url", "cloudinary_url"];
-  const header = first.some(
-    (v) => captionAliases.includes(v) || urlAliases.includes(v) || v === "status" || v === "state",
-  );
+  const normalize = (value: unknown) => String(value ?? "").trim().toLowerCase().replace(/[\s_-]+/g, "");
+  const first = (matrix[0] ?? []).map(normalize);
+  const captionAliases = ["caption", "text", "description", "copy", "captiontext", "posttext"];
+  const urlAliases = ["url", "videourl", "link", "mediaurl", "cloudinaryurl", "videolink"];
+  const header = first.some((v) => captionAliases.includes(v) || urlAliases.includes(v) || v === "status" || v === "state");
   const start = header ? 1 : 0;
-  let ci = header ? first.findIndex((v) => captionAliases.includes(v)) : -1;
-  let ui = header ? first.findIndex((v) => urlAliases.includes(v)) : -1;
-  if (ci < 0 || ui < 0) {
-    const width = Math.max(0, ...matrix.map((r) => r.length));
-    for (let c = 0; c < width; c++) {
-      const vals = matrix
-        .slice(start)
-        .map((r) => String(r[c] ?? "").trim())
-        .filter(Boolean);
-      const share = vals.length
-        ? vals.filter((v) => /^https?:\/\//i.test(v)).length / vals.length
-        : 0;
-      if (ui < 0 && share >= 0.5) ui = c;
-      else if (ci < 0 && vals.length) ci = c;
-    }
-  }
+  let ci = first.findIndex((v) => captionAliases.includes(v));
+  let ui = first.findIndex((v) => urlAliases.includes(v));
+  const width = Math.max(0, ...matrix.map((r) => r.length));
+  const scores = Array.from({ length: width }, (_, c) => {
+    const vals = matrix.slice(start).map((r) => String(r[c] ?? "").trim()).filter(Boolean);
+    const urlShare = vals.length ? vals.filter((v) => /^https?:\/\//i.test(v)).length / vals.length : 0;
+    const textShare = vals.length ? vals.filter((v) => !/^https?:\/\//i.test(v) && v.length >= 8).length / vals.length : 0;
+    const averageTextLength = vals.length ? vals.reduce((sum, v) => sum + v.length, 0) / vals.length : 0;
+    return { c, vals, urlShare, textShare, averageTextLength };
+  });
+  if (ui < 0) ui = scores.filter((s) => s.urlShare >= 0.5).sort((a, b) => b.urlShare - a.urlShare)[0]?.c ?? -1;
+  if (ci < 0)
+    ci = scores
+      .filter((s) => s.c !== ui && s.textShare >= 0.5 && s.averageTextLength >= 8)
+      .sort((a, b) => b.textShare * b.averageTextLength - a.textShare * a.averageTextLength)[0]?.c ?? -1;
   const warnings: string[] = [];
+  if (ui < 0) warnings.push("URL column not found — please map manually");
+  if (ci < 0) warnings.push("Caption column not found — please map manually");
   const rows: ImportRow[] = [];
   for (let i = start; i < matrix.length; i++) {
     const r = matrix[i] ?? [];
-    const caption = String(r[ci >= 0 ? ci : 0] ?? "").trim();
-    const video_url = String(r[ui >= 0 ? ui : 1] ?? "").trim();
+    const caption = ci >= 0 ? String(r[ci] ?? "").trim() : "";
+    const video_url = ui >= 0 ? String(r[ui] ?? "").trim() : "";
     if (!caption && !video_url) continue;
+    if (ci < 0 || ui < 0) continue;
     const issue = validate("video_url", video_url) ?? (caption && validate("caption", caption));
     if (issue || !video_url) {
       warnings.push(`Row ${i + 1}: ${issue ?? "Video URL is required"}`);
@@ -290,6 +293,51 @@ function SheetModePage() {
                 placeholder="August Reels Batch"
               />
             </div>
+            <div className="space-y-1">
+              <Label>Publish mode</Label>
+              <Select
+                value={settings.publish_mode}
+                onValueChange={(v) => setSettings({ ...settings, publish_mode: v as Settings["publish_mode"] })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="shareNow">Publish immediately</SelectItem>
+                  <SelectItem value="addToQueue">Add to Buffer queue</SelectItem>
+                  <SelectItem value="customScheduled">Custom schedule</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {settings.publish_mode === "customScheduled" && (
+              <div className="space-y-1">
+                <Label>Custom schedule</Label>
+                <Select
+                  value={settings.custom_schedule_offset_minutes == null ? "absolute" : String(settings.custom_schedule_offset_minutes)}
+                  onValueChange={(v) =>
+                    setSettings({
+                      ...settings,
+                      custom_schedule_offset_minutes: v === "absolute" ? null : Number(v),
+                      custom_schedule_at: v === "absolute" ? settings.custom_schedule_at : null,
+                    })
+                  }
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">In 5 minutes</SelectItem>
+                    <SelectItem value="15">In 15 minutes</SelectItem>
+                    <SelectItem value="30">In 30 minutes</SelectItem>
+                    <SelectItem value="60">In 60 minutes</SelectItem>
+                    <SelectItem value="absolute">Choose date/time</SelectItem>
+                  </SelectContent>
+                </Select>
+                {settings.custom_schedule_offset_minutes == null && (
+                  <Input
+                    type="datetime-local"
+                    value={settings.custom_schedule_at ? settings.custom_schedule_at.slice(0, 16) : ""}
+                    onChange={(e) => setSettings({ ...settings, custom_schedule_at: e.target.value ? new Date(e.target.value).toISOString() : null })}
+                  />
+                )}
+              </div>
+            )}
             <div className="space-y-1">
               <Label>Rows per run</Label>
               <Input
@@ -532,7 +580,7 @@ function SheetGrid({
       "STATUS",
       "CAPTION",
       "VIDEO URL",
-      ...active.flatMap((t) => [`${t.platform} STATUS`, `${t.platform} PUBLISHED URL`]),
+      ...active.flatMap((t) => [`${t.channel_label} STATUS`, `${t.channel_label} PUBLISHED URL`]),
     ];
     const lines = [
       header,
@@ -574,7 +622,10 @@ function SheetGrid({
             onClick={() =>
               run(
                 publishNext({ data: { sheet_id: sheet.id } }).then((result) => {
-                  toast.success(`Publish cycle complete: ${result.succeeded ?? 0} succeeded, ${result.failed ?? 0} failed`);
+                  const summary = result.noEligiblePendingChannel
+                    ? "No rows had an eligible pending channel"
+                    : `Publish cycle complete: ${result.succeeded ?? 0} succeeded, ${result.failed ?? 0} failed`;
+                  toast[result.failed ? "error" : "success"](summary);
                   return result;
                 }),
               )
@@ -740,7 +791,7 @@ function SheetGrid({
                     <>
                       <Header
                         key={`s-${t.id}`}
-                        label={`${t.platform.toUpperCase()} STATUS`}
+                        label={`${t.channel_label} · STATUS`}
                         column={`status:${t.id}`}
                         rows={rows}
                         selected={selected}
@@ -748,7 +799,7 @@ function SheetGrid({
                       />
                       <Header
                         key={`u-${t.id}`}
-                        label={`${t.platform.toUpperCase()} PUBLISHED URL`}
+                        label={`${t.channel_label} · PUBLISHED URL`}
                         column={`published_url:${t.id}`}
                         rows={rows}
                         selected={selected}

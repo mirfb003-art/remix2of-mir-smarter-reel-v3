@@ -1653,6 +1653,9 @@ export type Database = {
           id: string
           is_enabled: boolean
           name: string
+          publish_mode: "shareNow" | "addToQueue" | "customScheduled"
+          custom_schedule_offset_minutes: number | null
+          custom_schedule_at: string | null
           retry_failed: boolean
           rows_per_run: number
           schedule_label: string | null
@@ -1669,6 +1672,9 @@ export type Database = {
           id?: string
           is_enabled?: boolean
           name: string
+          publish_mode?: "shareNow" | "addToQueue" | "customScheduled"
+          custom_schedule_offset_minutes?: number | null
+          custom_schedule_at?: string | null
           retry_failed?: boolean
           rows_per_run?: number
           schedule_label?: string | null
@@ -1685,6 +1691,9 @@ export type Database = {
           id?: string
           is_enabled?: boolean
           name?: string
+          publish_mode?: "shareNow" | "addToQueue" | "customScheduled"
+          custom_schedule_offset_minutes?: number | null
+          custom_schedule_at?: string | null
           retry_failed?: boolean
           rows_per_run?: number
           schedule_label?: string | null
