@@ -1653,12 +1653,12 @@ export type Database = {
           after_publish_save_time: boolean
           after_publish_save_url: boolean
           created_at: string
+          custom_schedule_at: string | null
+          custom_schedule_offset_minutes: number | null
           id: string
           is_enabled: boolean
           name: string
-          publish_mode: "shareNow" | "addToQueue" | "customScheduled"
-          custom_schedule_offset_minutes: number | null
-          custom_schedule_at: string | null
+          publish_mode: string
           retry_failed: boolean
           rows_per_run: number
           schedule_label: string | null
@@ -1672,12 +1672,12 @@ export type Database = {
           after_publish_save_time?: boolean
           after_publish_save_url?: boolean
           created_at?: string
+          custom_schedule_at?: string | null
+          custom_schedule_offset_minutes?: number | null
           id?: string
           is_enabled?: boolean
           name: string
-          publish_mode?: "shareNow" | "addToQueue" | "customScheduled"
-          custom_schedule_offset_minutes?: number | null
-          custom_schedule_at?: string | null
+          publish_mode?: string
           retry_failed?: boolean
           rows_per_run?: number
           schedule_label?: string | null
@@ -1691,12 +1691,12 @@ export type Database = {
           after_publish_save_time?: boolean
           after_publish_save_url?: boolean
           created_at?: string
+          custom_schedule_at?: string | null
+          custom_schedule_offset_minutes?: number | null
           id?: string
           is_enabled?: boolean
           name?: string
-          publish_mode?: "shareNow" | "addToQueue" | "customScheduled"
-          custom_schedule_offset_minutes?: number | null
-          custom_schedule_at?: string | null
+          publish_mode?: string
           retry_failed?: boolean
           rows_per_run?: number
           schedule_label?: string | null
