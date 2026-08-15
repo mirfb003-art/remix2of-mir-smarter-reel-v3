@@ -20,6 +20,7 @@ const nav = [
   { to: "/campaigns", label: "Campaigns", icon: FolderKanban },
   { to: "/queue", label: "Queue", icon: ListVideo },
   { to: "/sheet", label: "Sheet", icon: Table2 },
+  { to: "/sheet-mode", label: "Sheet Mode", icon: Table2 },
   { to: "/learning", label: "Learning", icon: Brain },
   { to: "/insights", label: "Insights", icon: TrendingUp },
   { to: "/reel-formula", label: "1 Reel Formula", icon: Repeat2 },
