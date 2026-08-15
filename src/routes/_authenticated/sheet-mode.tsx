@@ -33,6 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { SheetModeCustomizationEditor } from "@/components/sheet-mode-customization-editor";
 import { Textarea } from "@/components/ui/textarea";
 import {
   addSheetModeChannelTargets,
@@ -52,6 +53,9 @@ import {
   updateSheetModeChannelCell,
   updateSheetModeRow,
   publishNextSheetMode,
+  updateSheetModeChannelCustomization,
+  fillSheetModeCaptions,
+  fillSheetModeUrls,
 } from "@/lib/sheet-mode.functions";
 
 export const Route = createFileRoute("/_authenticated/sheet-mode")({ component: SheetModePage });
@@ -76,6 +80,7 @@ type Target = {
   platform: string;
   is_active: boolean;
   backfill_applied: boolean;
+  customization?: Record<string, unknown>;
 };
 type Cell = {
   id: string;
@@ -518,7 +523,10 @@ function SheetGrid({
     removeEmpty = useServerFn(removeEmptySheetModeRows),
     removeDuplicates = useServerFn(removeDuplicateSheetModeRows),
     retry = useServerFn(retryFailedSheetModeRows),
-    bulk = useServerFn(bulkUpdateSheetModeCells);
+    bulk = useServerFn(bulkUpdateSheetModeCells),
+    saveCustomization = useServerFn(updateSheetModeChannelCustomization),
+    fillCaptions = useServerFn(fillSheetModeCaptions),
+    fillUrls = useServerFn(fillSheetModeUrls);
   const fileRef = useRef<HTMLInputElement>(null);
   const [newChannel, setNewChannel] = useState("");
   const [backfillNewChannel, setBackfillNewChannel] = useState(false);
@@ -533,6 +541,10 @@ function SheetGrid({
   const [bulkColumn, setBulkColumn] = useState<Column>("caption");
   const [bulkMode, setBulkMode] = useState<"clear" | "overwrite" | "add">("overwrite");
   const [bulkValue, setBulkValue] = useState("");
+  const [fillMode, setFillMode] = useState<"caption" | "video_url" | null>(null);
+  const [fillValue, setFillValue] = useState("");
+  const [customizationTarget, setCustomizationTarget] = useState<string | null>(null);
+  const [customizationDraft, setCustomizationDraft] = useState<Record<string, any>>({});
   const active = targets.filter((t) => t.is_active);
   const run = (p: Promise<unknown>, text?: string) =>
     p
@@ -643,6 +655,20 @@ function SheetGrid({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          {fillMode && (
+            <div className="rounded-md border p-3 space-y-2">
+              <Label>{fillMode === "caption" ? "Fill Captions" : "Fill URLs"} — one per line</Label>
+              <Textarea value={fillValue} onChange={(e) => setFillValue(e.target.value)} placeholder={fillMode === "caption" ? "Caption one\nCaption two" : "https://example.com/one.mp4\nhttps://example.com/two.mp4"} />
+              <div className="flex gap-2">
+                <Button onClick={() => {
+                  const lines = fillValue.split(/\\r?\\n/);
+                  const request = fillMode === "caption" ? fillCaptions({ data: { sheet_id: sheet.id, lines } }) : fillUrls({ data: { sheet_id: sheet.id, lines } });
+                  request.then((result) => { toast.success(`Filled ${result.filled}, created ${result.created}, skipped ${result.skipped}`); setFillMode(null); refresh(); }).catch((e) => toast.error(msg(e)));
+                }} disabled={!fillValue.trim()}>Apply</Button>
+                <Button variant="outline" onClick={() => setFillMode(null)}>Cancel</Button>
+              </div>
+            </div>
+          )}
           <div className="flex flex-wrap gap-2">
             <input
               ref={fileRef}
@@ -656,6 +682,12 @@ function SheetGrid({
             </Button>
             <Button variant="outline" onClick={exportCsv}>
               <Download className="h-4 w-4 mr-2" /> Export CSV
+            </Button>
+            <Button variant="outline" onClick={() => { setFillMode("caption"); setFillValue(""); }}>
+              Fill Captions
+            </Button>
+            <Button variant="outline" onClick={() => { setFillMode("video_url"); setFillValue(""); }}>
+              Fill URLs
             </Button>
             <Button
               variant="outline"
@@ -910,6 +942,13 @@ function SheetGrid({
             <Badge key={t.id} variant="outline">
               {t.channel_label}
               <button
+                className="ml-2"
+                title="Edit Buffer customization"
+                onClick={() => { setCustomizationTarget(t.id); setCustomizationDraft((t.customization && typeof t.customization === "object" ? t.customization : {}) as Record<string, any>); }}
+              >
+                <Settings2 className="inline h-3 w-3" />
+              </button>
+              <button
                 className="ml-1"
                 title="Remove channel"
                 onClick={() =>
@@ -923,6 +962,19 @@ function SheetGrid({
               </button>
             </Badge>
           ))}
+          {customizationTarget && (() => {
+            const target = active.find((item) => item.id === customizationTarget);
+            if (!target) return null;
+            return (
+              <SheetModeCustomizationEditor
+                platform={target.platform}
+                value={customizationDraft}
+                onChange={setCustomizationDraft}
+                onSave={() => saveCustomization({ data: { sheet_id: sheet.id, target_id: target.id, customization: customizationDraft } }).then(() => { toast.success("Channel customization saved"); setCustomizationTarget(null); refresh(); }).catch((e) => toast.error(msg(e)))}
+                onCancel={() => setCustomizationTarget(null)}
+              />
+            );
+          })()}
           <div className="flex items-center gap-2 text-sm">
             <input
               id="sheet-mode-backfill"

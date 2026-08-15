@@ -1,5 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Json } from "@/integrations/supabase/types";
+import { normalizeBufferPlatform } from "./buffer-platforms";
 import { z } from "zod";
 import { runSheetModeCycle } from "./sheet-mode.server";
 
@@ -33,9 +35,38 @@ const sheetSettingsSchema = z.object({
   retry_failed: z.boolean().default(true),
 });
 
+const customizationSchema = z.record(z.string(), z.any()).default({});
+
+const customizationKeysByPlatform = {
+  instagram: new Set(["postType", "shareToFeed", "isAiGenerated", "link", "geolocation"]),
+  tiktok: new Set(["isAiGenerated", "title"]),
+  facebook: new Set(["facebookType", "linkAttachment", "firstComment"]),
+  youtube: new Set(["youtubeTitle", "youtubePrivacy", "categoryId", "madeForKids", "notifySubscribers", "embeddable", "license"]),
+  pinterest: new Set(["boardServiceId", "title"]),
+} as const;
+
+function validateCustomization(platform: string, value: Record<string, any>) {
+  const normalized = normalizeBufferPlatform(platform);
+  const allowed = customizationKeysByPlatform[normalized as keyof typeof customizationKeysByPlatform];
+  if (!allowed) throw new Error(`Unsupported customization platform: ${platform}`);
+  const unknown = Object.keys(value).filter((key) => !allowed.has(key));
+  if (unknown.length) throw new Error(`Unsupported ${normalized} customization field(s): ${unknown.join(", ")}`);
+  const booleanKeys = ["shareToFeed", "isAiGenerated", "madeForKids", "notifySubscribers", "embeddable"];
+  for (const key of booleanKeys) if (key in value && typeof value[key] !== "boolean") throw new Error(`${key} must be a boolean`);
+  const stringKeys = ["link", "title", "firstComment", "youtubeTitle", "categoryId", "boardServiceId"];
+  for (const key of stringKeys) if (key in value && typeof value[key] !== "string") throw new Error(`${key} must be a string`);
+  if ("postType" in value && !["post", "reel", "story"].includes(value.postType)) throw new Error("Instagram postType is invalid");
+  if ("facebookType" in value && !["post", "story", "reel"].includes(value.facebookType)) throw new Error("Facebook type is invalid");
+  if ("youtubePrivacy" in value && !["public", "unlisted", "private"].includes(value.youtubePrivacy)) throw new Error("YouTube privacy is invalid");
+  if ("license" in value && !["youtube", "creativeCommon"].includes(value.license)) throw new Error("YouTube license is invalid");
+  if ("geolocation" in value && (!value.geolocation || typeof value.geolocation !== "object" || typeof value.geolocation.id !== "string" || typeof value.geolocation.text !== "string")) throw new Error("Instagram geolocation requires string id and text");
+  if ("linkAttachment" in value && (!value.linkAttachment || typeof value.linkAttachment !== "object" || typeof value.linkAttachment.url !== "string" || (value.linkAttachment.title != null && typeof value.linkAttachment.title !== "string") || (value.linkAttachment.description != null && typeof value.linkAttachment.description !== "string") || (value.linkAttachment.thumbnail?.url != null && typeof value.linkAttachment.thumbnail.url !== "string"))) throw new Error("Facebook linkAttachment has an invalid shape");
+  return value;
+}
 const targetInput = z.object({
   channel_id: channelId,
   backfill_applied: z.boolean().default(false),
+  customization: customizationSchema,
 });
 
 const rowValues = z.object({
@@ -66,6 +97,7 @@ type SheetModeTargetSummary = {
   platform: string;
   is_active: boolean;
   backfill_applied: boolean;
+  customization: Json;
   added_at: string;
   removed_at: string | null;
 };
@@ -148,7 +180,7 @@ export const listSheetModeWorkspace = createServerFn({ method: "GET" })
     if (sheets.length) {
       const { data: targets, error } = await context.supabase
         .from("sheet_mode_channel_targets")
-        .select("id,sheet_id,buffer_connection_id,channel_id,channel_label,platform,is_active,backfill_applied,added_at,removed_at")
+        .select("id,sheet_id,buffer_connection_id,channel_id,channel_label,platform,is_active,backfill_applied,customization,added_at,removed_at")
         .in("sheet_id", sheets.map((sheet) => sheet.id))
         .eq("is_active", true)
         .order("added_at", { ascending: true });
@@ -207,6 +239,7 @@ export const createSheetModeSheet = createServerFn({ method: "POST" })
             platform: channel.platform ?? "unknown",
             is_active: true,
             backfill_applied: target.backfill_applied,
+            customization: target.customization,
           };
         }),
       );
@@ -321,6 +354,7 @@ export const addSheetModeChannelTargets = createServerFn({ method: "POST" })
         platform: channel.platform ?? "unknown",
         is_active: true,
         backfill_applied: target.backfill_applied,
+        customization: target.customization,
         removed_at: null,
       }, { onConflict: "sheet_id,buffer_connection_id,channel_id" }).select("id").single();
       if (error) throw new Error(error.message);
@@ -335,6 +369,32 @@ export const addSheetModeChannelTargets = createServerFn({ method: "POST" })
       }
     }
     return { ok: true };
+  });
+
+export const updateSheetModeChannelCustomization = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ sheet_id: sheetId, target_id: z.string().uuid(), customization: customizationSchema }).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertSheetOwner(context.supabase, context.userId, data.sheet_id);
+    const { data: target, error: targetError } = await context.supabase
+      .from("sheet_mode_channel_targets")
+      .select("platform")
+      .eq("id", data.target_id)
+      .eq("sheet_id", data.sheet_id)
+      .maybeSingle();
+    if (targetError) throw new Error(targetError.message);
+    if (!target) throw new Error("Channel target not found");
+    const customization = validateCustomization(target.platform, data.customization);
+    const { data: updated, error } = await context.supabase
+      .from("sheet_mode_channel_targets")
+      .update({ customization })
+      .eq("id", data.target_id)
+      .eq("sheet_id", data.sheet_id)
+      .select("*")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!updated) throw new Error("Channel target not found");
+    return updated;
   });
 
 export const removeSheetModeChannelTarget = createServerFn({ method: "POST" })
@@ -567,3 +627,69 @@ export const bulkUpdateSheetModeCells = createServerFn({ method: "POST" })
     }
     return { changed: changed.length, skipped: errors.length, errors };
   });
+
+
+const fillLinesSchema = z.object({ sheet_id: sheetId, lines: z.array(z.string().max(20000)).min(1).max(5000) });
+
+async function fillSheetModeColumn(sb: any, sheetIdValue: string, column: "caption" | "video_url", lines: string[]) {
+  const { data: rows, error } = await sb.from("sheet_mode_rows").select("id,position,caption,video_url").eq("sheet_id", sheetIdValue).order("position", { ascending: true });
+  if (error) throw new Error(error.message);
+  const skipped: Array<{ line: number; message: string }> = [];
+  const valid: string[] = [];
+  lines.forEach((raw, index) => {
+    const value = raw.trim();
+    const issue = validateCellValue(column, value);
+    if (issue || !value) skipped.push({ line: index + 1, message: issue ?? `${column === "caption" ? "Caption" : "URL"} cannot be empty` });
+    else valid.push(value);
+  });
+  const emptyRows = (rows ?? []).filter((row: any) => !String(row[column] ?? "").trim());
+  let filled = 0;
+  const updates = valid.slice(0, emptyRows.length);
+  for (let index = 0; index < updates.length; index++) {
+    const result = await sb.from("sheet_mode_rows").update({ [column]: updates[index] }).eq("id", emptyRows[index].id).eq("sheet_id", sheetIdValue);
+    if (result.error) throw new Error(result.error.message);
+    filled++;
+  }
+  const overflow = valid.slice(updates.length);
+  const inserted = await insertImportedRows(
+    sb,
+    sheetIdValue,
+    overflow.map((value) => ({ caption: column === "caption" ? value : "", video_url: column === "video_url" ? value : "" })),
+  );
+  return { filled, created: inserted.inserted, skipped: skipped.length, errors: skipped };
+}
+
+export const fillSheetModeCaptions = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => fillLinesSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    await assertSheetOwner(context.supabase, context.userId, data.sheet_id);
+    return fillSheetModeColumn(context.supabase, data.sheet_id, "caption", data.lines);
+  });
+
+export const fillSheetModeUrls = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => fillLinesSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    await assertSheetOwner(context.supabase, context.userId, data.sheet_id);
+    return fillSheetModeColumn(context.supabase, data.sheet_id, "video_url", data.lines);
+  });
+
+export const updateSheetModeChannelCustomizationJson = updateSheetModeChannelCustomization;
+
+export const SHEET_MODE_TIKTOK_API_NOTE = "Buffer's API currently supports only TikTok isAiGenerated and title; privacy, comments, duet, and stitch controls are not sent.";
+
+export const SHEET_MODE_METADATA_FIELD_NOTE = "Instagram firstComment and Pinterest url are accepted by Buffer but currently not reliably persisted; they are intentionally not exposed as working fields.";
+
+export const SHEET_MODE_YOUTUBE_CATEGORIES = [
+  ["1", "Film & Animation"], ["2", "Autos & Vehicles"], ["10", "Music"], ["15", "Pets & Animals"],
+  ["17", "Sports"], ["19", "Travel & Events"], ["20", "Gaming"], ["22", "People & Blogs"],
+  ["23", "Comedy"], ["24", "Entertainment"], ["25", "News & Politics"], ["26", "Howto & Style"],
+  ["27", "Education"], ["28", "Science & Tech"], ["29", "Nonprofits & Activism"],
+] as const;
+
+export const SHEET_MODE_TIKTOK_FIELDS_AUDIT = {
+  uiFields: ["Privacy Level", "Allow Comments", "Allow Duet", "Allow Stitch"],
+  serverForwarding: "The current Reel Formula worker passes these values into the formula object, but buffer.server.ts does not serialize them into TikTok metadata; the current Buffer mapper returns no TikTok metadata for the Reel Formula path.",
+  recommendation: "Remove or relabel these controls only after user approval at the Part I checkpoint.",
+} as const;

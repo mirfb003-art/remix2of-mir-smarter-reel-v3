@@ -1491,6 +1491,7 @@ export type Database = {
           buffer_connection_id: string
           channel_id: string
           channel_label: string
+          customization: Json
           id: string
           is_active: boolean
           platform: string
@@ -1503,6 +1504,7 @@ export type Database = {
           buffer_connection_id: string
           channel_id: string
           channel_label: string
+          customization?: Json
           id?: string
           is_active?: boolean
           platform: string
@@ -1515,6 +1517,7 @@ export type Database = {
           buffer_connection_id?: string
           channel_id?: string
           channel_label?: string
+          customization?: Json
           id?: string
           is_active?: boolean
           platform?: string

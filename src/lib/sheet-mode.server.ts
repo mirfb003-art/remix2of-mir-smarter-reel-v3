@@ -29,6 +29,7 @@ type Target = {
   platform: string;
   is_active: boolean;
   backfill_applied: boolean;
+  customization: Record<string, unknown>;
   added_at: string;
   channel: any;
 };
@@ -95,7 +96,7 @@ async function loadTargets(sb: Sb, sheetId: string): Promise<Target[]> {
   const { data, error } = await sb
     .from("sheet_mode_channel_targets")
     .select(
-      "id,sheet_id,buffer_connection_id,channel_id,channel_label,platform,is_active,backfill_applied,added_at,channels(id,buffer_channel_id,name,platform,buffer_credentials(api_token,graphql_endpoint))",
+      "id,sheet_id,buffer_connection_id,channel_id,channel_label,platform,is_active,backfill_applied,customization,added_at,channels(id,buffer_channel_id,name,platform,buffer_credentials(api_token,graphql_endpoint))",
     )
     .eq("sheet_id", sheetId)
     .eq("is_active", true)
@@ -267,7 +268,7 @@ async function publishChannel(
           mode: sheet.publish_mode,
           dueAt: resolveSheetDueAt(sheet),
           platform: target.platform,
-          formula: { isAiGenerated: false },
+          formula: { isAiGenerated: false, ...(target.customization ?? {}) } as any,
         });
       },
       async (attempt, error, durationMs) => {

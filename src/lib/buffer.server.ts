@@ -31,7 +31,15 @@ export interface BufferClient {
   createPost(input: {
     channelId: string; text: string; mediaUrl: string;
     mode?: PublishMode; dueAt?: string | null; platform?: string | null;
-    formula?: { postType?: string | null; shareToFeed?: boolean; thumbnailTimestamp?: number; privacyLevel?: string | null; allowComments?: boolean; allowDuet?: boolean; allowStitch?: boolean; firstComment?: string | null; isAiGenerated?: boolean };
+    formula?: {
+      postType?: string | null; shareToFeed?: boolean; thumbnailTimestamp?: number;
+      firstComment?: string | null; isAiGenerated?: boolean; title?: string | null;
+      link?: string | null; geolocation?: { id: string; text: string } | null;
+      facebookType?: string | null; linkAttachment?: { url: string; title?: string; description?: string; thumbnail?: { url: string } } | null;
+      youtubeTitle?: string | null; youtubePrivacy?: "public" | "unlisted" | "private"; categoryId?: string | null;
+      madeForKids?: boolean; notifySubscribers?: boolean; embeddable?: boolean; license?: "youtube" | "creativeCommon";
+      boardServiceId?: string | null;
+    };
   }): Promise<BufferPostProof>;
   getPost(id: string): Promise<{ analytics: Record<string, number>; raw: any } | null>;
   getPostProof(id: string): Promise<BufferPostProof | null>;
@@ -78,9 +86,40 @@ function platformMetadata(platform: string | null | undefined, video: boolean, f
       shouldShareToFeed: f.shareToFeed !== false,
       ...(typeof f.firstComment === "string" && f.firstComment ? { firstComment: f.firstComment } : {}),
       ...(typeof f.isAiGenerated === "boolean" ? { isAiGenerated: f.isAiGenerated } : {}),
+      ...(typeof f.link === "string" && f.link ? { link: f.link } : {}),
+      ...(f.geolocation && typeof f.geolocation === "object" ? { geolocation: f.geolocation } : {}),
     } };
   }
-  if (p === "facebook") return { facebook: { type: typeof f.postType === "string" ? f.postType : video ? "reel" : "post" } };
+  if (p === "tiktok") return {
+    tiktok: {
+      ...(typeof f.isAiGenerated === "boolean" ? { isAiGenerated: f.isAiGenerated } : {}),
+      ...(typeof f.title === "string" && f.title ? { title: f.title } : {}),
+    },
+  };
+  if (p === "facebook") return { facebook: {
+    type: typeof f.facebookType === "string"
+      ? f.facebookType
+      : typeof f.postType === "string"
+        ? f.postType
+        : video
+          ? "reel"
+          : "post",
+    ...(f.linkAttachment && typeof f.linkAttachment === "object" ? { linkAttachment: f.linkAttachment } : {}),
+    ...(typeof f.firstComment === "string" && f.firstComment ? { firstComment: f.firstComment } : {}),
+  } };
+  if (p === "youtube") return { youtube: {
+    ...(typeof f.youtubeTitle === "string" && f.youtubeTitle ? { title: f.youtubeTitle } : {}),
+    ...(typeof f.youtubePrivacy === "string" ? { privacy: f.youtubePrivacy } : {}),
+    ...(typeof f.categoryId === "string" && f.categoryId ? { categoryId: f.categoryId } : {}),
+    ...(typeof f.madeForKids === "boolean" ? { madeForKids: f.madeForKids } : {}),
+    ...(typeof f.notifySubscribers === "boolean" ? { notifySubscribers: f.notifySubscribers } : {}),
+    ...(typeof f.embeddable === "boolean" ? { embeddable: f.embeddable } : {}),
+    ...(typeof f.license === "string" ? { license: f.license } : {}),
+  } };
+  if (p === "pinterest") return { pinterest: {
+    ...(typeof f.boardServiceId === "string" && f.boardServiceId ? { boardServiceId: f.boardServiceId } : {}),
+    ...(typeof f.title === "string" && f.title ? { title: f.title } : {}),
+  } };
   return null;
 }
 
