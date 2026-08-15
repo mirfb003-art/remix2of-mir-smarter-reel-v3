@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedSheetModeRouteImport } from './routes/_authenticated/sheet-mode'
 import { Route as AuthenticatedSheetRouteImport } from './routes/_authenticated/sheet'
 import { Route as AuthenticatedReelFormulaRouteImport } from './routes/_authenticated/reel-formula'
 import { Route as AuthenticatedQueueRouteImport } from './routes/_authenticated/queue'
@@ -43,6 +44,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedSheetModeRoute = AuthenticatedSheetModeRouteImport.update({
+  id: '/sheet-mode',
+  path: '/sheet-mode',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedSheetRoute = AuthenticatedSheetRouteImport.update({
   id: '/sheet',
@@ -150,6 +156,7 @@ export interface FileRoutesByFullPath {
   '/queue': typeof AuthenticatedQueueRoute
   '/reel-formula': typeof AuthenticatedReelFormulaRoute
   '/sheet': typeof AuthenticatedSheetRoute
+  '/sheet-mode': typeof AuthenticatedSheetModeRoute
   '/settings/ai': typeof AuthenticatedSettingsAiRoute
   '/settings/analysis': typeof AuthenticatedSettingsAnalysisRoute
   '/settings/buffer': typeof AuthenticatedSettingsBufferRoute
@@ -171,6 +178,7 @@ export interface FileRoutesByTo {
   '/queue': typeof AuthenticatedQueueRoute
   '/reel-formula': typeof AuthenticatedReelFormulaRoute
   '/sheet': typeof AuthenticatedSheetRoute
+  '/sheet-mode': typeof AuthenticatedSheetModeRoute
   '/settings/ai': typeof AuthenticatedSettingsAiRoute
   '/settings/analysis': typeof AuthenticatedSettingsAnalysisRoute
   '/settings/buffer': typeof AuthenticatedSettingsBufferRoute
@@ -194,6 +202,7 @@ export interface FileRoutesById {
   '/_authenticated/queue': typeof AuthenticatedQueueRoute
   '/_authenticated/reel-formula': typeof AuthenticatedReelFormulaRoute
   '/_authenticated/sheet': typeof AuthenticatedSheetRoute
+  '/_authenticated/sheet-mode': typeof AuthenticatedSheetModeRoute
   '/_authenticated/settings/ai': typeof AuthenticatedSettingsAiRoute
   '/_authenticated/settings/analysis': typeof AuthenticatedSettingsAnalysisRoute
   '/_authenticated/settings/buffer': typeof AuthenticatedSettingsBufferRoute
@@ -217,6 +226,7 @@ export interface FileRouteTypes {
     | '/queue'
     | '/reel-formula'
     | '/sheet'
+    | '/sheet-mode'
     | '/settings/ai'
     | '/settings/analysis'
     | '/settings/buffer'
@@ -238,6 +248,7 @@ export interface FileRouteTypes {
     | '/queue'
     | '/reel-formula'
     | '/sheet'
+    | '/sheet-mode'
     | '/settings/ai'
     | '/settings/analysis'
     | '/settings/buffer'
@@ -260,6 +271,7 @@ export interface FileRouteTypes {
     | '/_authenticated/queue'
     | '/_authenticated/reel-formula'
     | '/_authenticated/sheet'
+    | '/_authenticated/sheet-mode'
     | '/_authenticated/settings/ai'
     | '/_authenticated/settings/analysis'
     | '/_authenticated/settings/buffer'
@@ -302,6 +314,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/sheet-mode': {
+      id: '/_authenticated/sheet-mode'
+      path: '/sheet-mode'
+      fullPath: '/sheet-mode'
+      preLoaderRoute: typeof AuthenticatedSheetModeRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/sheet': {
       id: '/_authenticated/sheet'
@@ -434,6 +453,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedQueueRoute: typeof AuthenticatedQueueRoute
   AuthenticatedReelFormulaRoute: typeof AuthenticatedReelFormulaRoute
   AuthenticatedSheetRoute: typeof AuthenticatedSheetRoute
+  AuthenticatedSheetModeRoute: typeof AuthenticatedSheetModeRoute
   AuthenticatedSettingsAiRoute: typeof AuthenticatedSettingsAiRoute
   AuthenticatedSettingsAnalysisRoute: typeof AuthenticatedSettingsAnalysisRoute
   AuthenticatedSettingsBufferRoute: typeof AuthenticatedSettingsBufferRoute
@@ -451,6 +471,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedQueueRoute: AuthenticatedQueueRoute,
   AuthenticatedReelFormulaRoute: AuthenticatedReelFormulaRoute,
   AuthenticatedSheetRoute: AuthenticatedSheetRoute,
+  AuthenticatedSheetModeRoute: AuthenticatedSheetModeRoute,
   AuthenticatedSettingsAiRoute: AuthenticatedSettingsAiRoute,
   AuthenticatedSettingsAnalysisRoute: AuthenticatedSettingsAnalysisRoute,
   AuthenticatedSettingsBufferRoute: AuthenticatedSettingsBufferRoute,
