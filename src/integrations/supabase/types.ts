@@ -289,216 +289,6 @@ export type Database = {
           },
         ]
       }
-      sheet_mode_channel_targets: {
-        Row: {
-          added_at: string
-          backfill_applied: boolean
-          buffer_connection_id: string
-          channel_id: string
-          channel_label: string
-          id: string
-          is_active: boolean
-          platform: string
-          removed_at: string | null
-          sheet_id: string
-        }
-        Insert: {
-          added_at?: string
-          backfill_applied?: boolean
-          buffer_connection_id: string
-          channel_id: string
-          channel_label: string
-          id?: string
-          is_active?: boolean
-          platform: string
-          removed_at?: string | null
-          sheet_id: string
-        }
-        Update: {
-          added_at?: string
-          backfill_applied?: boolean
-          buffer_connection_id?: string
-          channel_id?: string
-          channel_label?: string
-          id?: string
-          is_active?: boolean
-          platform?: string
-          removed_at?: string | null
-          sheet_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sheet_mode_channel_targets_buffer_connection_id_fkey"
-            columns: ["buffer_connection_id"]
-            isOneToOne: false
-            referencedRelation: "buffer_credentials"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sheet_mode_channel_targets_channel_id_fkey"
-            columns: ["channel_id"]
-            isOneToOne: false
-            referencedRelation: "channels"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sheet_mode_channel_targets_sheet_id_fkey"
-            columns: ["sheet_id"]
-            isOneToOne: false
-            referencedRelation: "sheet_mode_sheets"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sheet_mode_row_channel_status: {
-        Row: {
-          channel_target_id: string
-          id: string
-          last_attempt_at: string | null
-          last_error: string | null
-          published_at: string | null
-          published_post_id: string | null
-          published_url: string | null
-          row_id: string
-          status: string
-        }
-        Insert: {
-          channel_target_id: string
-          id?: string
-          last_attempt_at?: string | null
-          last_error?: string | null
-          published_at?: string | null
-          published_post_id?: string | null
-          published_url?: string | null
-          row_id: string
-          status?: string
-        }
-        Update: {
-          channel_target_id?: string
-          id?: string
-          last_attempt_at?: string | null
-          last_error?: string | null
-          published_at?: string | null
-          published_post_id?: string | null
-          published_url?: string | null
-          row_id?: string
-          status?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sheet_mode_row_channel_status_channel_target_id_fkey"
-            columns: ["channel_target_id"]
-            isOneToOne: false
-            referencedRelation: "sheet_mode_channel_targets"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sheet_mode_row_channel_status_row_id_fkey"
-            columns: ["row_id"]
-            isOneToOne: false
-            referencedRelation: "sheet_mode_rows"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sheet_mode_rows: {
-        Row: {
-          caption: string
-          created_at: string
-          id: string
-          position: number
-          priority: number | null
-          sheet_id: string
-          status: string
-          updated_at: string
-          video_url: string
-          weight: number | null
-        }
-        Insert: {
-          caption?: string
-          created_at?: string
-          id?: string
-          position: number
-          priority?: number | null
-          sheet_id: string
-          status?: string
-          updated_at?: string
-          video_url?: string
-          weight?: number | null
-        }
-        Update: {
-          caption?: string
-          created_at?: string
-          id?: string
-          position?: number
-          priority?: number | null
-          sheet_id?: string
-          status?: string
-          updated_at?: string
-          video_url?: string
-          weight?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sheet_mode_rows_sheet_id_fkey"
-            columns: ["sheet_id"]
-            isOneToOne: false
-            referencedRelation: "sheet_mode_sheets"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sheet_mode_sheets: {
-        Row: {
-          after_publish_mark_status: boolean
-          after_publish_save_post_id: boolean
-          after_publish_save_time: boolean
-          after_publish_save_url: boolean
-          created_at: string
-          id: string
-          is_enabled: boolean
-          name: string
-          retry_failed: boolean
-          rows_per_run: number
-          schedule_label: string | null
-          selection_rule: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          after_publish_mark_status?: boolean
-          after_publish_save_post_id?: boolean
-          after_publish_save_time?: boolean
-          after_publish_save_url?: boolean
-          created_at?: string
-          id?: string
-          is_enabled?: boolean
-          name: string
-          retry_failed?: boolean
-          rows_per_run?: number
-          schedule_label?: string | null
-          selection_rule?: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          after_publish_mark_status?: boolean
-          after_publish_save_post_id?: boolean
-          after_publish_save_time?: boolean
-          after_publish_save_url?: boolean
-          created_at?: string
-          id?: string
-          is_enabled?: boolean
-          name?: string
-          retry_failed?: boolean
-          rows_per_run?: number
-          schedule_label?: string | null
-          selection_rule?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       campaigns: {
         Row: {
           channel_mode: string
@@ -1689,6 +1479,216 @@ export type Database = {
           notifications?: Json
           rate_limit_per_min?: number
           retry_interval_s?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      sheet_mode_channel_targets: {
+        Row: {
+          added_at: string
+          backfill_applied: boolean
+          buffer_connection_id: string
+          channel_id: string
+          channel_label: string
+          id: string
+          is_active: boolean
+          platform: string
+          removed_at: string | null
+          sheet_id: string
+        }
+        Insert: {
+          added_at?: string
+          backfill_applied?: boolean
+          buffer_connection_id: string
+          channel_id: string
+          channel_label: string
+          id?: string
+          is_active?: boolean
+          platform: string
+          removed_at?: string | null
+          sheet_id: string
+        }
+        Update: {
+          added_at?: string
+          backfill_applied?: boolean
+          buffer_connection_id?: string
+          channel_id?: string
+          channel_label?: string
+          id?: string
+          is_active?: boolean
+          platform?: string
+          removed_at?: string | null
+          sheet_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sheet_mode_channel_targets_buffer_connection_id_fkey"
+            columns: ["buffer_connection_id"]
+            isOneToOne: false
+            referencedRelation: "buffer_credentials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sheet_mode_channel_targets_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sheet_mode_channel_targets_sheet_id_fkey"
+            columns: ["sheet_id"]
+            isOneToOne: false
+            referencedRelation: "sheet_mode_sheets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sheet_mode_row_channel_status: {
+        Row: {
+          channel_target_id: string
+          id: string
+          last_attempt_at: string | null
+          last_error: string | null
+          published_at: string | null
+          published_post_id: string | null
+          published_url: string | null
+          row_id: string
+          status: string
+        }
+        Insert: {
+          channel_target_id: string
+          id?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          published_at?: string | null
+          published_post_id?: string | null
+          published_url?: string | null
+          row_id: string
+          status?: string
+        }
+        Update: {
+          channel_target_id?: string
+          id?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          published_at?: string | null
+          published_post_id?: string | null
+          published_url?: string | null
+          row_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sheet_mode_row_channel_status_channel_target_id_fkey"
+            columns: ["channel_target_id"]
+            isOneToOne: false
+            referencedRelation: "sheet_mode_channel_targets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sheet_mode_row_channel_status_row_id_fkey"
+            columns: ["row_id"]
+            isOneToOne: false
+            referencedRelation: "sheet_mode_rows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sheet_mode_rows: {
+        Row: {
+          caption: string
+          created_at: string
+          id: string
+          position: number
+          priority: number | null
+          sheet_id: string
+          status: string
+          updated_at: string
+          video_url: string
+          weight: number | null
+        }
+        Insert: {
+          caption?: string
+          created_at?: string
+          id?: string
+          position: number
+          priority?: number | null
+          sheet_id: string
+          status?: string
+          updated_at?: string
+          video_url?: string
+          weight?: number | null
+        }
+        Update: {
+          caption?: string
+          created_at?: string
+          id?: string
+          position?: number
+          priority?: number | null
+          sheet_id?: string
+          status?: string
+          updated_at?: string
+          video_url?: string
+          weight?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sheet_mode_rows_sheet_id_fkey"
+            columns: ["sheet_id"]
+            isOneToOne: false
+            referencedRelation: "sheet_mode_sheets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sheet_mode_sheets: {
+        Row: {
+          after_publish_mark_status: boolean
+          after_publish_save_post_id: boolean
+          after_publish_save_time: boolean
+          after_publish_save_url: boolean
+          created_at: string
+          id: string
+          is_enabled: boolean
+          name: string
+          retry_failed: boolean
+          rows_per_run: number
+          schedule_label: string | null
+          selection_rule: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          after_publish_mark_status?: boolean
+          after_publish_save_post_id?: boolean
+          after_publish_save_time?: boolean
+          after_publish_save_url?: boolean
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          name: string
+          retry_failed?: boolean
+          rows_per_run?: number
+          schedule_label?: string | null
+          selection_rule?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          after_publish_mark_status?: boolean
+          after_publish_save_post_id?: boolean
+          after_publish_save_time?: boolean
+          after_publish_save_url?: boolean
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          name?: string
+          retry_failed?: boolean
+          rows_per_run?: number
+          schedule_label?: string | null
+          selection_rule?: string
           updated_at?: string
           user_id?: string
         }
