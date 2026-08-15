@@ -1932,6 +1932,15 @@ export type Database = {
         }
         Returns: boolean
       }
+      claim_sheet_mode_channel: {
+        Args: {
+          _channel_target_id: string
+          _now: string
+          _row_id: string
+          _stale_before: string
+        }
+        Returns: boolean
+      }
       release_channel_lock: {
         Args: { _channel_id: string; _run_id: string }
         Returns: undefined
