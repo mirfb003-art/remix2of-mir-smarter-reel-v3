@@ -25,6 +25,9 @@ const scheduleInput = z.object({
   scheduler_mode: z.enum(["every_x_hours", "daily_times", "manual"]).default("every_x_hours"),
   daily_times: z.array(z.string().regex(/^([01]\\d|2[0-3]):[0-5]\\d$/)).default([]),
   start_at: z.string().datetime().nullable().optional(),
+  cloudinary_transform_enabled: z.boolean().default(false),
+  cloudinary_transform: z.string().max(1000).default(""),
+  cloudinary_transform_mode: z.enum(["replace", "stack"]).default("replace"),
 });
 
 function initialFormulaNextRun(mode: string, dailyTimes: string[], intervalHours: number, startAt: string | null | undefined) {
@@ -103,6 +106,9 @@ export const activateRecurringSchedule = createServerFn({ method: "POST" })
       interval_hours: data.interval_hours,
       start_at: data.start_at ?? null,
       next_run_at: nextRun,
+      cloudinary_transform_enabled: data.cloudinary_transform_enabled,
+      cloudinary_transform: data.cloudinary_transform,
+      cloudinary_transform_mode: data.cloudinary_transform_mode,
       is_active: true,
     }).select("*").single();
     if (error) throw new Error(error.message);
@@ -111,6 +117,24 @@ export const activateRecurringSchedule = createServerFn({ method: "POST" })
       if (itemError) throw new Error(itemError.message);
     }
     return row;
+  });
+
+export const updateRecurringScheduleCloudinaryTransform = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    id: z.string().uuid(),
+    cloudinary_transform_enabled: z.boolean(),
+    cloudinary_transform: z.string().max(1000),
+    cloudinary_transform_mode: z.enum(["replace", "stack"]),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase.from("recurring_schedules").update({
+      cloudinary_transform_enabled: data.cloudinary_transform_enabled,
+      cloudinary_transform: data.cloudinary_transform,
+      cloudinary_transform_mode: data.cloudinary_transform_mode,
+    }).eq("id", data.id).eq("user_id", context.userId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
 
 export const listRecurringScheduleItems = createServerFn({ method: "GET" })

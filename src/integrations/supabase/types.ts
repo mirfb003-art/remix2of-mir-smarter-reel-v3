@@ -292,6 +292,9 @@ export type Database = {
       campaigns: {
         Row: {
           channel_mode: string
+          cloudinary_transform_enabled: boolean
+          cloudinary_transform: string
+          cloudinary_transform_mode: string
           created_at: string
           custom_objective: string | null
           custom_scheduled_at: string | null
@@ -310,6 +313,9 @@ export type Database = {
         }
         Insert: {
           channel_mode?: string
+          cloudinary_transform_enabled?: boolean
+          cloudinary_transform?: string
+          cloudinary_transform_mode?: string
           created_at?: string
           custom_objective?: string | null
           custom_scheduled_at?: string | null
@@ -328,6 +334,9 @@ export type Database = {
         }
         Update: {
           channel_mode?: string
+          cloudinary_transform_enabled?: boolean
+          cloudinary_transform?: string
+          cloudinary_transform_mode?: string
           created_at?: string
           custom_objective?: string | null
           custom_scheduled_at?: string | null
@@ -1168,6 +1177,9 @@ export type Database = {
           allow_duet: boolean
           allow_stitch: boolean
           campaign_id: string | null
+          cloudinary_transform_enabled: boolean
+          cloudinary_transform: string
+          cloudinary_transform_mode: string
           caption: string
           channel_id: string
           created_at: string
@@ -1199,6 +1211,9 @@ export type Database = {
           allow_duet?: boolean
           allow_stitch?: boolean
           campaign_id?: string | null
+          cloudinary_transform_enabled?: boolean
+          cloudinary_transform?: string
+          cloudinary_transform_mode?: string
           caption?: string
           channel_id: string
           created_at?: string
@@ -1230,6 +1245,9 @@ export type Database = {
           allow_duet?: boolean
           allow_stitch?: boolean
           campaign_id?: string | null
+          cloudinary_transform_enabled?: boolean
+          cloudinary_transform?: string
+          cloudinary_transform_mode?: string
           caption?: string
           channel_id?: string
           created_at?: string

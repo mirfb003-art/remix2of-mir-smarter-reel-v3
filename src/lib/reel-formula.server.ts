@@ -1,5 +1,6 @@
 import { withRetry, audit, makeIdempotencyKey } from "./reliability.server";
 import { makeBufferClient, resolveBufferCredential } from "./buffer.server";
+import { applyCloudinaryTransform, isCloudinaryDeliveryUrl } from "./cloudinary-transform";
 
 type Sb = any;
 
@@ -105,6 +106,13 @@ export async function runReelFormulaSchedule(sb: Sb, scheduleId: string, slotKey
       allowDuet: schedule.allow_duet,
       allowStitch: schedule.allow_stitch,
     };
+    const sourceMediaUrl = rotationItem?.media_url ?? schedule.media_url;
+    let publishMediaUrl = sourceMediaUrl;
+    if (schedule.cloudinary_transform_enabled && isCloudinaryDeliveryUrl(sourceMediaUrl)) {
+      const transformed = applyCloudinaryTransform(sourceMediaUrl, schedule.cloudinary_transform, schedule.cloudinary_transform_mode);
+      if (transformed.error) throw new Error(`Cloudinary transformation failed: ${transformed.error}`);
+      publishMediaUrl = transformed.url;
+    }
     const existingBufferPostId = (run.step_state as any)?.buffer_post_id as string | undefined;
     const existingProof = existingBufferPostId ? await buffer.getPostProof(existingBufferPostId) : null;
     const published = existingProof ?? await withRetry("buffer", async (attempt) => {
@@ -112,7 +120,7 @@ export async function runReelFormulaSchedule(sb: Sb, scheduleId: string, slotKey
       return buffer.createPost({
         channelId: channel.buffer_channel_id,
           text: rotationItem?.caption ?? schedule.caption ?? "",
-          mediaUrl: rotationItem?.media_url ?? schedule.media_url,
+          mediaUrl: publishMediaUrl,
         mode: "shareNow",
         platform: schedule.platform,
         formula: formulaOptions,

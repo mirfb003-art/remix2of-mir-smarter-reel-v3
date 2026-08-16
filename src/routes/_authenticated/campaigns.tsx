@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { listCampaigns, upsertCampaign, setCampaignStatus, deleteCampaign, updateCampaignPublishing, resetCampaign } from "@/lib/campaigns.functions";
+import { listCampaigns, upsertCampaign, setCampaignStatus, deleteCampaign, updateCampaignPublishing, updateCampaignCloudinaryTransform, resetCampaign } from "@/lib/campaigns.functions";
 import { PublishModeFields, PUBLISH_MODES, isoToLocalInput, localInputToIso, type PublishMode } from "@/components/publish-mode-fields";
 import { setActiveCampaignId, useActiveCampaignId } from "@/lib/active-campaign";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { useState } from "react";
 import { Play, Pause, Square, Trash2, Plus, CircleCheck, RotateCcw, RefreshCw, Eraser, Pencil, Check, X } from "lucide-react";
 import { MultiChannelCampaignPanel } from "@/components/multi-channel-campaign-panel";
+import { CloudinaryTransformFields } from "@/components/cloudinary-transform-fields";
 import {
   createSampleCaption,
   deleteSampleCaption,
@@ -47,6 +48,7 @@ function CampaignsPage() {
   const del = useServerFn(deleteCampaign);
   const reset = useServerFn(resetCampaign);
   const updatePublishing = useServerFn(updateCampaignPublishing);
+  const updateCloudinary = useServerFn(updateCampaignCloudinaryTransform);
   const listSamples = useServerFn(listSampleCaptions);
   const createSample = useServerFn(createSampleCaption);
   const updateSample = useServerFn(updateSampleCaption);
@@ -73,6 +75,9 @@ function CampaignsPage() {
   const [publishMode, setPublishMode] = useState<PublishMode>("addToQueue");
   const [scheduledAt, setScheduledAt] = useState("");
   const [delayMinutes, setDelayMinutes] = useState<number | null>(null);
+  const [cloudinaryTransformEnabled, setCloudinaryTransformEnabled] = useState(false);
+  const [cloudinaryTransform, setCloudinaryTransform] = useState("");
+  const [cloudinaryTransformMode, setCloudinaryTransformMode] = useState<"replace" | "stack">("replace");
   const [sampleText, setSampleText] = useState("");
   const [editingSampleId, setEditingSampleId] = useState<string | null>(null);
   const [editingSampleText, setEditingSampleText] = useState("");
@@ -86,10 +91,13 @@ function CampaignsPage() {
       publish_mode: publishMode,
       custom_scheduled_at: publishMode === "customScheduled" ? localInputToIso(scheduledAt) : null,
       publish_delay_minutes: publishMode === "customScheduled" ? delayMinutes : null,
+      cloudinary_transform_enabled: cloudinaryTransformEnabled,
+      cloudinary_transform: cloudinaryTransform,
+      cloudinary_transform_mode: cloudinaryTransformMode,
     } }),
     onSuccess: (r) => {
       toast.success("Campaign created");
-      setName(""); setDesc(""); setCustomObj(""); setChannelMode("single");
+      setName(""); setDesc(""); setCustomObj(""); setChannelMode("single"); setCloudinaryTransformEnabled(false); setCloudinaryTransform(""); setCloudinaryTransformMode("replace");
       setActiveCampaignId(r.id);
       qc.invalidateQueries({ queryKey: ["campaigns"] });
     },
@@ -99,6 +107,11 @@ function CampaignsPage() {
   const statusMut = useMutation({
     mutationFn: (p: { id: string; status: "active" | "paused" | "stopped" }) => setStatus({ data: p }),
     onSuccess: () => { toast.success("Updated"); qc.invalidateQueries(); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+  const cloudinaryMut = useMutation({
+    mutationFn: (value: { cloudinary_transform_enabled: boolean; cloudinary_transform: string; cloudinary_transform_mode: "replace" | "stack" }) => updateCloudinary({ data: { id: activeId!, ...value } }),
+    onSuccess: () => { toast.success("Cloudinary transformation settings saved"); qc.invalidateQueries({ queryKey: ["campaigns"] }); },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
   const publishMut = useMutation({
@@ -191,6 +204,7 @@ function CampaignsPage() {
               delayMinutes={delayMinutes} onDelayMinutesChange={setDelayMinutes}
             />
           </div>
+          <div className="md:col-span-2"><CloudinaryTransformFields enabled={cloudinaryTransformEnabled} transformation={cloudinaryTransform} mode={cloudinaryTransformMode} onEnabledChange={setCloudinaryTransformEnabled} onTransformationChange={setCloudinaryTransform} onModeChange={setCloudinaryTransformMode} /></div>
           <div className="flex items-center gap-3 md:col-span-2 pt-2">
             <Switch id="sl" checked={shareLearning} onCheckedChange={setShareLearning}/>
             <Label htmlFor="sl" className="text-sm font-normal">Share learning across all campaigns (default: isolated)</Label>
@@ -204,6 +218,8 @@ function CampaignsPage() {
       </Card>
 
       {activeCampaign && <MultiChannelCampaignPanel campaignId={activeCampaign.id} campaignMode={activeCampaign.channel_mode ?? "single"} />}
+
+      {activeCampaign && <Card><CardHeader><CardTitle>Cloudinary transformation</CardTitle><CardDescription>Applied only to the temporary media URL sent to Buffer. The campaign queue URL is never rewritten.</CardDescription></CardHeader><CardContent><CloudinaryTransformFields enabled={Boolean(activeCampaign.cloudinary_transform_enabled)} transformation={activeCampaign.cloudinary_transform ?? ""} mode={activeCampaign.cloudinary_transform_mode === "stack" ? "stack" : "replace"} onEnabledChange={(cloudinary_transform_enabled) => cloudinaryMut.mutate({ cloudinary_transform_enabled, cloudinary_transform: activeCampaign.cloudinary_transform ?? "", cloudinary_transform_mode: activeCampaign.cloudinary_transform_mode === "stack" ? "stack" : "replace" })} onTransformationChange={(cloudinary_transform) => cloudinaryMut.mutate({ cloudinary_transform_enabled: Boolean(activeCampaign.cloudinary_transform_enabled), cloudinary_transform, cloudinary_transform_mode: activeCampaign.cloudinary_transform_mode === "stack" ? "stack" : "replace" })} onModeChange={(cloudinary_transform_mode) => cloudinaryMut.mutate({ cloudinary_transform_enabled: Boolean(activeCampaign.cloudinary_transform_enabled), cloudinary_transform: activeCampaign.cloudinary_transform ?? "", cloudinary_transform_mode })} /></CardContent></Card>}
 
       {activeCampaign && (
         <Card>

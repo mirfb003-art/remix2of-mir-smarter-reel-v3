@@ -7,7 +7,7 @@ export const listCampaigns = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data, error } = await context.supabase
       .from("campaigns")
-      .select("id,name,description,objective,custom_objective,status,share_learning,publish_mode,custom_scheduled_at,publish_delay_minutes,use_sample_captions,sample_caption_mode,channel_mode,created_at,updated_at")
+      .select("id,name,description,objective,custom_objective,status,share_learning,publish_mode,custom_scheduled_at,publish_delay_minutes, use_sample_captions,sample_caption_mode,channel_mode,cloudinary_transform_enabled,cloudinary_transform,cloudinary_transform_mode,created_at,updated_at")
       .order("created_at", { ascending: true });
     if (error) throw new Error(error.message);
     return data ?? [];
@@ -26,6 +26,9 @@ const upsertSchema = z.object({
   use_sample_captions: z.boolean().optional(),
   sample_caption_mode: z.enum(["style_reference", "learning_seed"]).optional(),
   channel_mode: z.enum(["single", "multi"]).optional(),
+  cloudinary_transform_enabled: z.boolean().optional(),
+  cloudinary_transform: z.string().max(1000).optional(),
+  cloudinary_transform_mode: z.enum(["replace", "stack"]).optional(),
 });
 
 export const upsertCampaign = createServerFn({ method: "POST" })
@@ -45,6 +48,9 @@ export const upsertCampaign = createServerFn({ method: "POST" })
         ...(data.use_sample_captions === undefined ? {} : { use_sample_captions: data.use_sample_captions }),
         ...(data.sample_caption_mode === undefined ? {} : { sample_caption_mode: data.sample_caption_mode }),
         ...(data.channel_mode === undefined ? {} : { channel_mode: data.channel_mode }),
+        ...(data.cloudinary_transform_enabled === undefined ? {} : { cloudinary_transform_enabled: data.cloudinary_transform_enabled }),
+        ...(data.cloudinary_transform === undefined ? {} : { cloudinary_transform: data.cloudinary_transform }),
+        ...(data.cloudinary_transform_mode === undefined ? {} : { cloudinary_transform_mode: data.cloudinary_transform_mode }),
         ...publishFields,
       }).eq("id", data.id);
       if (error) throw new Error(error.message);
@@ -55,6 +61,9 @@ export const upsertCampaign = createServerFn({ method: "POST" })
       objective: data.objective, custom_objective: data.custom_objective ?? null,
       share_learning: data.share_learning ?? false,
       channel_mode: data.channel_mode ?? "single",
+      cloudinary_transform_enabled: data.cloudinary_transform_enabled ?? false,
+      cloudinary_transform: data.cloudinary_transform ?? "",
+      cloudinary_transform_mode: data.cloudinary_transform_mode ?? "replace",
       ...publishFields,
     }).select("id").single();
     if (error) throw new Error(error.message);
@@ -79,6 +88,24 @@ export const updateCampaignPublishing = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+
+export const updateCampaignCloudinaryTransform = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    id: z.string().uuid(),
+    cloudinary_transform_enabled: z.boolean(),
+    cloudinary_transform: z.string().max(1000),
+    cloudinary_transform_mode: z.enum(["replace", "stack"]),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase.from("campaigns").update({
+      cloudinary_transform_enabled: data.cloudinary_transform_enabled,
+      cloudinary_transform: data.cloudinary_transform,
+      cloudinary_transform_mode: data.cloudinary_transform_mode,
+    }).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
 
 export const setCampaignStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

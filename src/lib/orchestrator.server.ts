@@ -7,6 +7,7 @@ import {
   withRetry, audit, acquireChannelLock, releaseChannelLock,
   refreshHeartbeat, getActivePromptVersion, makeIdempotencyKey,
 } from "./reliability.server";
+import { applyCloudinaryTransform, isCloudinaryDeliveryUrl } from "./cloudinary-transform";
 
 import { decideStrategy, type StrategyDecision } from "./strategy-engine.server";
 import { predictMetrics, computeBaseline } from "./prediction-engine.server";
@@ -431,12 +432,21 @@ async function stepPublish(
   const cred = await resolveBufferCredential(sb, userId, campaignId, channel.buffer_credentials);
   const buffer = makeBufferClient(cred.api_token, cred.graphql_endpoint);
 
+  let publishMediaUrl = videoUrl;
+  if (campaignId && isCloudinaryDeliveryUrl(videoUrl)) {
+    const { data: campaign } = await sb.from("campaigns").select("cloudinary_transform_enabled,cloudinary_transform,cloudinary_transform_mode").eq("id", campaignId).eq("user_id", userId).maybeSingle();
+    if (campaign?.cloudinary_transform_enabled) {
+      const transformed = applyCloudinaryTransform(videoUrl, campaign.cloudinary_transform, campaign.cloudinary_transform_mode);
+      if (transformed.error) throw new Error(`Cloudinary transformation failed: ${transformed.error}`);
+      publishMediaUrl = transformed.url;
+    }
+  }
   const t0 = Date.now();
   const published = await withRetry("buffer",
     async () => buffer.createPost({
       channelId: channel.buffer_channel_id,
       text: caption.caption,
-      mediaUrl: videoUrl,
+      mediaUrl: publishMediaUrl,
       mode: plan.mode,
       dueAt: plan.dueAt,
       platform: channel.platform,
