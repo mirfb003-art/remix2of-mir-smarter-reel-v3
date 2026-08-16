@@ -20,6 +20,7 @@ import {
   RotateCcw,
   Wand2,
 } from "lucide-react";
+import { CloudinaryUpload } from "@/components/cloudinary-upload";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1115,12 +1116,15 @@ function GridRow({
             checked={selected.video_url?.has(row.id) ?? false}
             onChange={(e) => select("video_url", row.id, e.target.checked)}
           />
-          <Input
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            onBlur={save}
-            placeholder="https://…"
-          />
+          <div className="min-w-0 flex-1 space-y-2">
+            <Input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              onBlur={save}
+              placeholder="https://…"
+            />
+            <CloudinaryUpload onUploaded={(uploadedUrl) => { setUrl(uploadedUrl); updateRow({ id: row.id, caption, video_url: uploadedUrl, priority: row.priority, weight: row.weight }); }} />
+          </div>
         </div>
       </td>
       {targets.map((t) => {
