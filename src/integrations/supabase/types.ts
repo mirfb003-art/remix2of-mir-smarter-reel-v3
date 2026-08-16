@@ -1142,8 +1142,10 @@ export type Database = {
           last_run_id: string | null
           media_url: string
           mode: string
-          current_item_position: number
-          next_run_at: string
+          last_published_item_id: string | null
+          scheduler_mode: string
+          daily_times: Json
+          next_run_at: string | null
           platform: string
           post_type: string
           privacy_level: string | null
@@ -1170,8 +1172,10 @@ export type Database = {
           last_run_id?: string | null
           media_url: string
           mode?: string
-          current_item_position?: number
-          next_run_at: string
+          last_published_item_id?: string | null
+          scheduler_mode?: string
+          daily_times?: Json
+          next_run_at?: string | null
           platform: string
           post_type: string
           privacy_level?: string | null
@@ -1198,7 +1202,7 @@ export type Database = {
           last_run_id?: string | null
           media_url?: string
           mode?: string
-          current_item_position?: number
+          last_published_item_id?: string | null
           next_run_at?: string
           platform?: string
           post_type?: string
@@ -1704,6 +1708,10 @@ export type Database = {
           name: string
           publish_mode: string
           retry_failed: boolean
+          scheduler_mode: string
+          scheduler_interval_hours: number
+          daily_times: Json
+          next_run_at: string | null
           rows_per_run: number
           schedule_label: string | null
           selection_rule: string
@@ -1723,6 +1731,10 @@ export type Database = {
           name: string
           publish_mode?: string
           retry_failed?: boolean
+          scheduler_mode?: string
+          scheduler_interval_hours?: number
+          daily_times?: Json
+          next_run_at?: string | null
           rows_per_run?: number
           schedule_label?: string | null
           selection_rule?: string
@@ -1742,6 +1754,10 @@ export type Database = {
           name?: string
           publish_mode?: string
           retry_failed?: boolean
+          scheduler_mode?: string
+          scheduler_interval_hours?: number
+          daily_times?: Json
+          next_run_at?: string | null
           rows_per_run?: number
           schedule_label?: string | null
           selection_rule?: string
@@ -1995,6 +2011,10 @@ export type Database = {
           _row_id: string
           _stale_before: string
         }
+        Returns: boolean
+      }
+      claim_sheet_mode_schedule: {
+        Args: { _next_run_at: string | null; _now: string; _sheet_id: string }
         Returns: boolean
       }
       move_recurring_schedule_item: {

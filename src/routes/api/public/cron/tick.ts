@@ -57,6 +57,7 @@ export const Route = createFileRoute("/api/public/cron/tick")({
           .from("recurring_schedules")
           .select("id,user_id,campaign_id,next_run_at,is_active,campaigns(status)")
           .eq("is_active", true)
+          .neq("scheduler_mode", "manual")
           .lte("next_run_at", now)
           .limit(20);
         const formulaResults: Array<{ id: string; ok: boolean; error?: string; skipped?: string }> = [];

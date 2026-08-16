@@ -19,6 +19,10 @@ type Sheet = {
   after_publish_save_url: boolean;
   retry_failed: boolean;
   is_enabled: boolean;
+  scheduler_mode: "every_x_hours" | "daily_times" | "manual";
+  scheduler_interval_hours: number;
+  daily_times: string[];
+  next_run_at: string | null;
 };
 type Target = {
   id: string;
@@ -59,6 +63,26 @@ const STALE_MS = 15 * 60 * 1000;
 
 function bucketKey(now: Date) {
   return new Date(Math.floor(now.getTime() / 300_000) * 300_000).toISOString();
+}
+function nextSheetRunAt(sheet: Pick<Sheet, "scheduler_mode" | "scheduler_interval_hours" | "daily_times">, now: Date) {
+  if (sheet.scheduler_mode === "manual") return null;
+  if (sheet.scheduler_mode === "every_x_hours") {
+    const hours = Number(sheet.scheduler_interval_hours ?? 0);
+    return new Date(now.getTime() + (hours > 0 ? hours * 3_600_000 : 300_000)).toISOString();
+  }
+  const times = [...(sheet.daily_times ?? [])].sort();
+  for (const time of times) {
+    const [hour, minute] = time.split(":").map(Number);
+    if (!Number.isInteger(hour) || !Number.isInteger(minute)) continue;
+    const candidate = new Date(now);
+    candidate.setUTCHours(hour, minute, 0, 0);
+    if (candidate.getTime() > now.getTime()) return candidate.toISOString();
+  }
+  const [firstHour, firstMinute] = (times[0] ?? "00:00").split(":").map(Number);
+  const tomorrow = new Date(now);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  tomorrow.setUTCHours(firstHour || 0, firstMinute || 0, 0, 0);
+  return tomorrow.toISOString();
 }
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
@@ -486,15 +510,29 @@ export async function runSheetModeCycle(
 }
 
 export async function runDueSheetModeSheets(sb: Sb) {
+  const now = new Date();
   const { data: sheets, error } = await sb
     .from("sheet_mode_sheets")
-    .select("id,user_id")
+    .select("id,user_id,scheduler_mode,scheduler_interval_hours,daily_times,next_run_at")
     .eq("is_enabled", true)
+    .neq("scheduler_mode", "manual")
+    .lte("next_run_at", now.toISOString())
     .limit(50);
   if (error) throw new Error(error.message);
   const results: unknown[] = [];
-  const slotKey = bucketKey(new Date());
+  const slotKey = bucketKey(now);
   for (const sheet of sheets ?? []) {
+    const nextRunAt = nextSheetRunAt(sheet as any, now);
+    const { data: claimed, error: claimError } = await supabaseAdmin.rpc("claim_sheet_mode_schedule", {
+      _sheet_id: sheet.id,
+      _now: now.toISOString(),
+      _next_run_at: nextRunAt,
+    });
+    if (claimError) {
+      results.push({ sheetId: sheet.id, error: `sheet mode schedule claim: ${claimError.message}` });
+      continue;
+    }
+    if (!claimed) continue;
     try {
       results.push(await runSheetModeCycle(sb, sheet.id, "scheduled", slotKey));
     } catch (error) {

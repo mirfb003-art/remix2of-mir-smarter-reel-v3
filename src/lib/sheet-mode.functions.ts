@@ -33,6 +33,9 @@ const sheetSettingsSchema = z.object({
   after_publish_save_time: z.boolean().default(true),
   after_publish_save_url: z.boolean().default(true),
   retry_failed: z.boolean().default(true),
+  scheduler_mode: z.enum(["every_x_hours", "daily_times", "manual"]).default("every_x_hours"),
+  scheduler_interval_hours: z.number().int().min(0).max(8760).default(0),
+  daily_times: z.array(z.string().regex(/^([01]\\d|2[0-3]):[0-5]\\d$/)).default([]),
 });
 
 const customizationSchema = z.record(z.string(), z.any()).default({});
@@ -219,6 +222,10 @@ export const createSheetModeSheet = createServerFn({ method: "POST" })
         after_publish_save_time: data.after_publish_save_time,
         after_publish_save_url: data.after_publish_save_url,
         retry_failed: data.retry_failed,
+        scheduler_mode: data.scheduler_mode,
+        scheduler_interval_hours: data.scheduler_interval_hours,
+        daily_times: data.daily_times,
+        next_run_at: data.scheduler_mode === "manual" ? null : new Date().toISOString(),
         is_enabled: true,
       })
       .select("id,name")
@@ -267,6 +274,10 @@ export const updateSheetModeSheet = createServerFn({ method: "POST" })
         after_publish_save_time: data.after_publish_save_time,
         after_publish_save_url: data.after_publish_save_url,
         retry_failed: data.retry_failed,
+        scheduler_mode: data.scheduler_mode,
+        scheduler_interval_hours: data.scheduler_interval_hours,
+        daily_times: data.daily_times,
+        next_run_at: data.scheduler_mode === "manual" ? null : new Date().toISOString(),
       })
       .eq("id", data.id)
       .eq("user_id", context.userId);

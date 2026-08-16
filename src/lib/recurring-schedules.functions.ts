@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { runReelFormulaSchedule } from "./reel-formula.server";
 
 const platform = z.enum(["instagram", "tiktok"]);
 const postType = z.enum(["reel", "story", "video"]);
@@ -20,8 +22,28 @@ const scheduleInput = z.object({
   allow_duet: z.boolean().default(false),
   allow_stitch: z.boolean().default(false),
   interval_hours: z.number().int().min(1).max(8760),
+  scheduler_mode: z.enum(["every_x_hours", "daily_times", "manual"]).default("every_x_hours"),
+  daily_times: z.array(z.string().regex(/^([01]\\d|2[0-3]):[0-5]\\d$/)).default([]),
   start_at: z.string().datetime().nullable().optional(),
 });
+
+function initialFormulaNextRun(mode: string, dailyTimes: string[], intervalHours: number, startAt: string | null | undefined) {
+  if (mode === "manual") return null;
+  if (mode === "every_x_hours") return startAt ?? new Date().toISOString();
+  const now = new Date();
+  for (const time of [...dailyTimes].sort()) {
+    const [hour, minute] = time.split(":").map(Number);
+    if (!Number.isInteger(hour) || !Number.isInteger(minute)) continue;
+    const candidate = new Date(now);
+    candidate.setUTCHours(hour, minute, 0, 0);
+    if (candidate.getTime() > now.getTime()) return candidate.toISOString();
+  }
+  const [hour, minute] = (dailyTimes[0] ?? "00:00").split(":").map(Number);
+  const tomorrow = new Date(now);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  tomorrow.setUTCHours(hour || 0, minute || 0, 0, 0);
+  return tomorrow.toISOString();
+}
 
 async function assertOwner(sb: any, userId: string, campaignId: string | null | undefined, channelId: string, expectedPlatform: string) {
   const [{ data: channel, error: channelError }, campaignResult] = await Promise.all([
@@ -60,7 +82,7 @@ export const activateRecurringSchedule = createServerFn({ method: "POST" })
     await assertOwner(context.supabase, context.userId, data.campaign_id, data.channel_id, normalizedPlatform);
     if (data.mode === "multiple" && !data.items.length) throw new Error("Multiple mode requires at least one item");
     const firstItem = data.mode === "multiple" ? data.items[0] : null;
-    const nextRun = data.start_at ?? new Date().toISOString();
+    const nextRun = initialFormulaNextRun(data.scheduler_mode, data.daily_times, data.interval_hours, data.start_at);
     const { data: row, error } = await context.supabase.from("recurring_schedules").insert({
       user_id: context.userId,
       campaign_id: data.campaign_id ?? null,
@@ -68,7 +90,8 @@ export const activateRecurringSchedule = createServerFn({ method: "POST" })
       platform: normalizedPlatform,
       post_type: normalizedPostType,
       mode: data.mode,
-      current_item_position: 1,
+      scheduler_mode: data.scheduler_mode,
+      daily_times: data.daily_times,
       media_url: firstItem?.media_url ?? data.media_url,
       caption: firstItem?.caption ?? data.caption,
       share_to_feed: normalizedPlatform === "instagram" && normalizedPostType === "reel" ? data.share_to_feed : false,
@@ -144,6 +167,15 @@ export const moveRecurringScheduleItem = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     if (!moved) throw new Error("Rotation item not found");
     return { ok: true };
+  });
+
+export const runRecurringScheduleNow = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: schedule } = await context.supabase.from("recurring_schedules").select("id").eq("id", data.id).eq("user_id", context.userId).maybeSingle();
+    if (!schedule) throw new Error("Recurring schedule not found");
+    return runReelFormulaSchedule(supabaseAdmin as any, data.id, `manual-${crypto.randomUUID()}`);
   });
 
 export const setRecurringScheduleActive = createServerFn({ method: "POST" })

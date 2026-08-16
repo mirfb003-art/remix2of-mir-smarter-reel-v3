@@ -6,6 +6,26 @@ type Sb = any;
 function nextRunAt(now: Date, intervalHours: number) {
   return new Date(now.getTime() + intervalHours * 60 * 60 * 1000).toISOString();
 }
+function nextFormulaRunAt(schedule: any, now: Date, retry = false) {
+  if (schedule.scheduler_mode === "manual") return null;
+  if (retry) return new Date(now.getTime() + 5 * 60 * 1000).toISOString();
+  if (schedule.scheduler_mode === "daily_times") {
+    const times = [...(schedule.daily_times ?? [])].sort();
+    for (const time of times) {
+      const [hour, minute] = String(time).split(":").map(Number);
+      if (!Number.isInteger(hour) || !Number.isInteger(minute)) continue;
+      const candidate = new Date(now);
+      candidate.setUTCHours(hour, minute, 0, 0);
+      if (candidate.getTime() > now.getTime()) return candidate.toISOString();
+    }
+    const [hour, minute] = String(times[0] ?? "00:00").split(":").map(Number);
+    const tomorrow = new Date(now);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    tomorrow.setUTCHours(hour || 0, minute || 0, 0, 0);
+    return tomorrow.toISOString();
+  }
+  return nextRunAt(now, Number(schedule.interval_hours));
+}
 
 async function nextRunNumber(sb: Sb, userId: string) {
   const { data } = await sb.from("runs").select("run_number").eq("user_id", userId).order("run_number", { ascending: false }).limit(1).maybeSingle();
@@ -72,7 +92,9 @@ export async function runReelFormulaSchedule(sb: Sb, scheduleId: string, slotKey
     let rotationItem = null as any;
     if (schedule.mode === "multiple") {
       if (!items.length) throw new Error("Multiple-mode schedule has no rotation items");
-      rotationItem = items.find((item: any) => item.position === Number(schedule.current_item_position)) ?? items[0];
+      rotationItem = items.find((item: any) => item.id === schedule.last_published_item_id) ?? null;
+      const currentIndex = rotationItem ? items.findIndex((item: any) => item.id === rotationItem.id) : -1;
+      rotationItem = items[(currentIndex + 1 + items.length) % items.length] ?? items[0];
     }
     const formulaOptions = {
       postType: schedule.post_type,
@@ -119,17 +141,20 @@ export async function runReelFormulaSchedule(sb: Sb, scheduleId: string, slotKey
     if (postError) throw new Error(`formula post history: ${postError.message}`);
     const finish = new Date().toISOString();
     await sb.from("runs").update({ status: "complete", current_step: "complete", finished_at: finish, duration_ms: Date.now() - startedAt, heartbeat_at: finish, step_state: { recurring_schedule_id: schedule.id, slot_key: slotKey, step: "complete", buffer_post_id: published.postId } }).eq("id", run.id);
-    const nextPosition = schedule.mode === "multiple" && items.length
-      ? (items[(items.findIndex((item: any) => item.id === rotationItem?.id) + 1 + items.length) % items.length]?.position ?? items[0].position)
-      : schedule.current_item_position;
-    await sb.from("recurring_schedules").update({ last_run_at: finish, last_run_id: run.id, next_run_at: nextRunAt(new Date(), Number(schedule.interval_hours)), current_item_position: nextPosition, last_error: null }).eq("id", schedule.id);
-    await audit(sb, { userId: schedule.user_id, runId: run.id, eventType: "formula.run.completed", module: "reel_formula", status: "success", durationMs: Date.now() - startedAt,       payload: { post_id: published.postId, schedule_id: schedule.id, mode: schedule.mode ?? "single", rotation_item_position: rotationItem?.position ?? null } });
+    await sb.from("recurring_schedules").update({
+      last_run_at: finish,
+      last_run_id: run.id,
+      next_run_at: nextFormulaRunAt(schedule, new Date()),
+      last_published_item_id: schedule.mode === "multiple" ? rotationItem?.id ?? null : null,
+      last_error: null,
+    }).eq("id", schedule.id);
+    await audit(sb, { userId: schedule.user_id, runId: run.id, eventType: "formula.run.completed", module: "reel_formula", status: "success", durationMs: Date.now() - startedAt,       payload: { post_id: published.postId, schedule_id: schedule.id, mode: schedule.mode ?? "single", rotation_item_id: rotationItem?.id ?? null } });
     return { runId: run.id, postId: published.postId };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const finish = new Date().toISOString();
     await sb.from("runs").update({ status: "failed", current_step: "failed", error: message, finished_at: finish, duration_ms: Date.now() - startedAt, step_state: { recurring_schedule_id: schedule.id, slot_key: slotKey, step: "failed" } }).eq("id", run.id);
-    await sb.from("recurring_schedules").update({ last_run_at: finish, last_run_id: run.id, next_run_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(), last_error: message }).eq("id", schedule.id);
+    await sb.from("recurring_schedules").update({ last_run_at: finish, last_run_id: run.id, next_run_at: nextFormulaRunAt(schedule, new Date(), true), last_error: message }).eq("id", schedule.id);
     await audit(sb, { userId: schedule.user_id, runId: run.id, eventType: "formula.run.failed", module: "reel_formula", status: "error", durationMs: Date.now() - startedAt, error: message, payload: { schedule_id: schedule.id, slot_key: slotKey } });
     throw error;
   }

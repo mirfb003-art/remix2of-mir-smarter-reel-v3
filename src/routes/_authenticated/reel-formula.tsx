@@ -9,6 +9,7 @@ import {
   deleteRecurringSchedule,
   listFormulaRunHistory,
   listRecurringSchedules,
+  runRecurringScheduleNow,
   setRecurringScheduleActive,
 } from "@/lib/recurring-schedules.functions";
 import { CloudinaryUpload } from "@/components/cloudinary-upload";
@@ -26,6 +27,7 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Pause, Play, Repeat2, Trash2 } from "lucide-react";
 import { getBufferPlatformCapabilities } from "@/lib/buffer-platforms";
+import { FormulaSchedulerFields, type FormulaSchedulerMode } from "@/components/formula-scheduler-fields";
 
 export const Route = createFileRoute("/_authenticated/reel-formula")({ component: ReelFormulaPage });
 
@@ -44,6 +46,7 @@ function ReelFormulaPage() {
   const listSchedulesFn = useServerFn(listRecurringSchedules);
   const activateFn = useServerFn(activateRecurringSchedule);
   const setActiveFn = useServerFn(setRecurringScheduleActive);
+  const runNowFn = useServerFn(runRecurringScheduleNow);
   const deleteFn = useServerFn(deleteRecurringSchedule);
   const listHistoryFn = useServerFn(listFormulaRunHistory);
   const qc = useQueryClient();
@@ -73,6 +76,8 @@ function ReelFormulaPage() {
   const [intervalHours, setIntervalHours] = useState(24);
   const [startImmediately, setStartImmediately] = useState(true);
   const [startAt, setStartAt] = useState("");
+  const [schedulerMode, setSchedulerMode] = useState<FormulaSchedulerMode>("every_x_hours");
+  const [dailyTimes, setDailyTimes] = useState(["09:00"]);
 
   const selectedChannel = (channels ?? []).find((channel: any) => channel.id === channelId) as any;
   const platform = (String(selectedChannel?.platform ?? "instagram").toLowerCase().includes("tiktok") ? "tiktok" : "instagram") as Platform;
@@ -103,7 +108,9 @@ function ReelFormulaPage() {
         allow_duet: allowDuet,
         allow_stitch: allowStitch,
         interval_hours: Number(intervalHours),
-        start_at: startImmediately ? null : localInputToIso(startAt),
+        scheduler_mode: schedulerMode,
+        daily_times: dailyTimes,
+        start_at: schedulerMode === "every_x_hours" && !startImmediately ? localInputToIso(startAt) : null,
       },
     }),
     onSuccess: () => {
@@ -159,15 +166,13 @@ function ReelFormulaPage() {
             </div>
           ) : <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">Connect and select a Buffer channel before configuring the formula.</div>}
 
-          <div className="rounded-md border p-4 space-y-4">
-            <div className="font-medium text-sm">Scheduler interval</div>
-            <div className="grid gap-4 md:grid-cols-2"><div className="space-y-1"><Label>Repeat every (hours)</Label><Input type="number" min={1} max={8760} value={intervalHours} onChange={(event) => setIntervalHours(Number(event.target.value))} /></div><div className="space-y-1"><Label>Start</Label><div className="flex gap-2"><Button type="button" variant={startImmediately ? "default" : "outline"} onClick={() => setStartImmediately(true)}>Start Immediately</Button><Button type="button" variant={!startImmediately ? "default" : "outline"} onClick={() => setStartImmediately(false)}>Specific time</Button></div>{!startImmediately && <Input className="mt-2" type="datetime-local" value={startAt} onChange={(event) => setStartAt(event.target.value)} />}</div></div>
-          </div>
+          <FormulaSchedulerFields mode={schedulerMode} intervalHours={intervalHours} dailyTimes={dailyTimes} onModeChange={setSchedulerMode} onIntervalChange={setIntervalHours} onDailyTimesChange={setDailyTimes} />
+          {schedulerMode === "every_x_hours" && <div className="rounded-md border p-4 space-y-3"><div className="font-medium text-sm">First run</div><div className="flex gap-2"><Button type="button" variant={startImmediately ? "default" : "outline"} onClick={() => setStartImmediately(true)}>Start immediately</Button><Button type="button" variant={!startImmediately ? "default" : "outline"} onClick={() => setStartImmediately(false)}>Specific UTC time</Button></div>{!startImmediately && <Input type="datetime-local" value={startAt} onChange={(event) => setStartAt(event.target.value)} />}</div>}
           <Button onClick={() => activateMut.mutate()} disabled={!channelId || (mode === "single" ? !mediaUrl : rotationItems.some((item) => !item.media_url)) || !intervalHours || (!startImmediately && !startAt) || activateMut.isPending}><Repeat2 className="h-4 w-4 mr-2" />Activate 1 Reel Formula</Button>
         </CardContent>
       </Card>
 
-      <Card><CardHeader><CardTitle>Active formulas</CardTitle><CardDescription>Pause, resume, or delete recurring formulas. Each formula runs independently from the main adaptive loop.</CardDescription></CardHeader><CardContent>{!schedules?.length ? <div className="text-sm text-muted-foreground">No formulas activated yet.</div> : <div className="space-y-3">{schedules.map((schedule: any) => <div key={schedule.id} className="flex flex-wrap items-center gap-3 rounded-md border p-3"><div className="min-w-0 flex-1"><div className="font-medium">{schedule.channels?.name ?? "Channel"} · {schedule.platform} {schedule.post_type}</div><div className="text-xs text-muted-foreground truncate">Every {schedule.interval_hours}h · next {new Date(schedule.next_run_at).toLocaleString()} · {schedule.media_url}</div>{schedule.last_error && <div className="text-xs text-destructive">{schedule.last_error}</div>}{schedule.mode === "multiple" && <RecurringScheduleItemsPanel scheduleId={schedule.id} />}</div><Badge variant={schedule.is_active ? "default" : "secondary"}>{schedule.is_active ? "active" : "paused"}</Badge><Button size="icon" variant="ghost" title={schedule.is_active ? "Pause" : "Resume"} onClick={() => activeMut.mutate({ id: schedule.id, is_active: !schedule.is_active })}>{schedule.is_active ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}</Button><Button size="icon" variant="ghost" title="Delete" onClick={() => deleteMut.mutate(schedule.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)}</div>}</CardContent></Card>
+      <Card><CardHeader><CardTitle>Active formulas</CardTitle><CardDescription>Pause, resume, or delete recurring formulas. Each formula runs independently from the main adaptive loop.</CardDescription></CardHeader><CardContent>{!schedules?.length ? <div className="text-sm text-muted-foreground">No formulas activated yet.</div> : <div className="space-y-3">{schedules.map((schedule: any) => <div key={schedule.id} className="flex flex-wrap items-center gap-3 rounded-md border p-3"><div className="min-w-0 flex-1"><div className="font-medium">{schedule.channels?.name ?? "Channel"} · {schedule.platform} {schedule.post_type}</div><div className="text-xs text-muted-foreground truncate">Every {schedule.interval_hours}h · next {new Date(schedule.next_run_at).toLocaleString()} · {schedule.media_url}</div>{schedule.last_error && <div className="text-xs text-destructive">{schedule.last_error}</div>}{schedule.mode === "multiple" && <RecurringScheduleItemsPanel scheduleId={schedule.id} />}</div><Badge variant={schedule.is_active ? "default" : "secondary"}>{schedule.is_active ? "active" : "paused"}</Badge>{schedule.scheduler_mode === "manual" && <Button size="sm" variant="outline" onClick={() => runNowFn({ data: { id: schedule.id } }).then(() => { toast.success("Formula published"); qc.invalidateQueries({ queryKey: ["recurring-schedules"] }); }).catch((error) => toast.error(error instanceof Error ? error.message : "Publish failed"))}>Publish next</Button>}<Button size="icon" variant="ghost" title={schedule.is_active ? "Pause" : "Resume"} onClick={() => activeMut.mutate({ id: schedule.id, is_active: !schedule.is_active })}>{schedule.is_active ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}</Button><Button size="icon" variant="ghost" title="Delete" onClick={() => deleteMut.mutate(schedule.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)}</div>}</CardContent></Card>
 
       <Card><CardHeader><CardTitle>Recent formula runs</CardTitle><CardDescription>Formula publishes are logged to the shared runs and audit history with the `1_reel_formula` marker.</CardDescription></CardHeader><CardContent>{!history?.length ? <div className="text-sm text-muted-foreground">No formula runs yet.</div> : <div className="space-y-2">{history.map((run: any) => <div key={run.id} className="flex flex-wrap items-center gap-3 rounded-md border p-3 text-sm"><Badge variant={run.status === "complete" ? "default" : run.status === "failed" ? "destructive" : "secondary"}>{run.status}</Badge><span>{new Date(run.started_at).toLocaleString()}</span><span className="text-muted-foreground">{run.published_posts?.[0]?.permalink ?? run.error ?? "No proof yet"}</span></div>)}</div>}</CardContent></Card>
     </div>

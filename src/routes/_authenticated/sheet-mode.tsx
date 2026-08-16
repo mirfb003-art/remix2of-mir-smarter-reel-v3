@@ -36,6 +36,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { SheetModeCustomizationEditor } from "@/components/sheet-mode-customization-editor";
 import { SheetModeSettingsEditor } from "@/components/sheet-mode-settings-editor";
+import { AppSchedulerFields } from "@/components/app-scheduler-fields";
 import { Textarea } from "@/components/ui/textarea";
 import {
   addSheetModeChannelTargets,
@@ -75,6 +76,9 @@ type Settings = {
   after_publish_save_time: boolean;
   after_publish_save_url: boolean;
   retry_failed: boolean;
+  scheduler_mode: "every_x_hours" | "daily_times" | "manual";
+  scheduler_interval_hours: number;
+  daily_times: string[];
 };
 type Target = {
   id: string;
@@ -120,6 +124,9 @@ const DEFAULT: Settings = {
   after_publish_save_time: true,
   after_publish_save_url: true,
   retry_failed: true,
+  scheduler_mode: "every_x_hours",
+  scheduler_interval_hours: 1,
+  daily_times: ["09:00"],
 };
 const RULES = [
   ["first_ready", "First ready"],
@@ -348,6 +355,7 @@ function SheetModePage() {
                 )}
               </div>
             )}
+            <AppSchedulerFields mode={settings.scheduler_mode} intervalHours={settings.scheduler_interval_hours} dailyTimes={settings.daily_times} onModeChange={(scheduler_mode) => setSettings({ ...settings, scheduler_mode })} onIntervalChange={(scheduler_interval_hours) => setSettings({ ...settings, scheduler_interval_hours })} onDailyTimesChange={(daily_times) => setSettings({ ...settings, daily_times })} />
             <div className="space-y-1">
               <Label>Rows per run</Label>
               <Input
@@ -618,7 +626,7 @@ function SheetGrid({
   };
   return (
     <div className="space-y-5 max-w-[1500px]">
-      {editingSettings && <SheetModeSettingsEditor initial={{ name: sheet.name, publish_mode: sheet.publish_mode, custom_schedule_offset_minutes: sheet.custom_schedule_offset_minutes, custom_schedule_at: sheet.custom_schedule_at, rows_per_run: sheet.rows_per_run, schedule_label: sheet.schedule_label, selection_rule: sheet.selection_rule, after_publish_mark_status: sheet.after_publish_mark_status, after_publish_save_post_id: sheet.after_publish_save_post_id, after_publish_save_time: sheet.after_publish_save_time, after_publish_save_url: sheet.after_publish_save_url, retry_failed: sheet.retry_failed }} onCancel={() => setEditingSettings(false)} onSave={(values) => { onSettingsSaved(values).then(() => { toast.success("Sheet settings saved"); setEditingSettings(false); refresh(); }).catch((error) => toast.error(msg(error))); }} />}
+      {editingSettings && <SheetModeSettingsEditor initial={{ name: sheet.name, publish_mode: sheet.publish_mode, custom_schedule_offset_minutes: sheet.custom_schedule_offset_minutes, custom_schedule_at: sheet.custom_schedule_at, rows_per_run: sheet.rows_per_run, schedule_label: sheet.schedule_label, selection_rule: sheet.selection_rule, after_publish_mark_status: sheet.after_publish_mark_status, after_publish_save_post_id: sheet.after_publish_save_post_id, after_publish_save_time: sheet.after_publish_save_time, after_publish_save_url: sheet.after_publish_save_url, retry_failed: sheet.retry_failed, scheduler_mode: sheet.scheduler_mode ?? "every_x_hours", scheduler_interval_hours: sheet.scheduler_interval_hours ?? 1, daily_times: sheet.daily_times ?? ["09:00"] }} onCancel={() => setEditingSettings(false)} onSave={(values) => { onSettingsSaved(values).then(() => { toast.success("Sheet settings saved"); setEditingSettings(false); refresh(); }).catch((error) => toast.error(msg(error))); }} />}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Button variant="ghost" size="sm" className="-ml-2 mb-2" onClick={onBack}>
