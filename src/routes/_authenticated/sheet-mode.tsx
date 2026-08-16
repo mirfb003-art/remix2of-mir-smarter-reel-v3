@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { CloudinaryUpload } from "@/components/cloudinary-upload";
 import { ContentGalleryPanel } from "@/components/content-gallery-panel";
+import { SchedulerStatsPanel } from "@/components/scheduler-stats-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -282,6 +283,7 @@ function SheetModePage() {
           onSettingsSaved={(values) => updateSettings({ data: { id: sheetId, ...values } })}
         />
         <ContentGalleryPanel />
+        <SchedulerStatsPanel />
       </div>
     );
   const action = (p: Promise<unknown>, text?: string) =>
