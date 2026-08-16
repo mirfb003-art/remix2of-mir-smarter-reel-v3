@@ -1124,6 +1124,44 @@ export type Database = {
           },
         ]
       }
+      recurring_schedule_items: {
+        Row: {
+          caption: string
+          created_at: string
+          id: string
+          media_url: string
+          position: number
+          schedule_id: string
+          updated_at: string
+        }
+        Insert: {
+          caption?: string
+          created_at?: string
+          id?: string
+          media_url: string
+          position: number
+          schedule_id: string
+          updated_at?: string
+        }
+        Update: {
+          caption?: string
+          created_at?: string
+          id?: string
+          media_url?: string
+          position?: number
+          schedule_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_schedule_items_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "recurring_schedules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       recurring_schedules: {
         Row: {
           allow_comments: boolean
@@ -1133,6 +1171,7 @@ export type Database = {
           caption: string
           channel_id: string
           created_at: string
+          current_item_position: number
           id: string
           interval_hours: number
           is_active: boolean
@@ -1163,6 +1202,7 @@ export type Database = {
           caption?: string
           channel_id: string
           created_at?: string
+          current_item_position?: number
           id?: string
           interval_hours: number
           is_active?: boolean
@@ -1193,6 +1233,7 @@ export type Database = {
           caption?: string
           channel_id?: string
           created_at?: string
+          current_item_position?: number
           id?: string
           interval_hours?: number
           is_active?: boolean
@@ -1203,7 +1244,9 @@ export type Database = {
           media_url?: string
           mode?: string
           last_published_item_id?: string | null
-          next_run_at?: string
+          scheduler_mode?: string
+          daily_times?: Json
+          next_run_at?: string | null
           platform?: string
           post_type?: string
           privacy_level?: string | null
@@ -1233,44 +1276,6 @@ export type Database = {
             columns: ["last_run_id"]
             isOneToOne: false
             referencedRelation: "runs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      recurring_schedule_items: {
-        Row: {
-          id: string
-          schedule_id: string
-          position: number
-          media_url: string
-          caption: string
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          schedule_id: string
-          position: number
-          media_url: string
-          caption?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          schedule_id?: string
-          position?: number
-          media_url?: string
-          caption?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "recurring_schedule_items_schedule_id_fkey"
-            columns: ["schedule_id"]
-            isOneToOne: false
-            referencedRelation: "recurring_schedules"
             referencedColumns: ["id"]
           },
         ]
