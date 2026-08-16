@@ -9,8 +9,10 @@ const scheduleInput = z.object({
   channel_id: z.string().uuid(),
   platform,
   post_type: postType,
-  media_url: z.string().url().max(2000),
+  mode: z.enum(["single", "multiple"]).default("single"),
+  media_url: z.string().url().max(2000).optional().default(""),
   caption: z.string().max(4000).default(""),
+  items: z.array(z.object({ media_url: z.string().url().max(2000), caption: z.string().max(4000).default("") })).max(50).default([]),
   share_to_feed: z.boolean().default(true),
   thumbnail_timestamp: z.number().min(0).max(86400).default(0),
   privacy_level: z.enum(["PUBLIC", "MUTUAL_FOLLOWS", "SELF_ONLY"]).nullable().optional(),
@@ -56,6 +58,8 @@ export const activateRecurringSchedule = createServerFn({ method: "POST" })
     if (normalizedPlatform === "tiktok" && !["video", "story"].includes(normalizedPostType)) throw new Error("TikTok supports Video or Story only");
     if (normalizedPlatform === "instagram" && normalizedPostType === "story") data.caption = "";
     await assertOwner(context.supabase, context.userId, data.campaign_id, data.channel_id, normalizedPlatform);
+    if (data.mode === "multiple" && !data.items.length) throw new Error("Multiple mode requires at least one item");
+    const firstItem = data.mode === "multiple" ? data.items[0] : null;
     const nextRun = data.start_at ?? new Date().toISOString();
     const { data: row, error } = await context.supabase.from("recurring_schedules").insert({
       user_id: context.userId,
@@ -63,8 +67,10 @@ export const activateRecurringSchedule = createServerFn({ method: "POST" })
       channel_id: data.channel_id,
       platform: normalizedPlatform,
       post_type: normalizedPostType,
-      media_url: data.media_url,
-      caption: data.caption,
+      mode: data.mode,
+      current_item_position: 1,
+      media_url: firstItem?.media_url ?? data.media_url,
+      caption: firstItem?.caption ?? data.caption,
       share_to_feed: normalizedPlatform === "instagram" && normalizedPostType === "reel" ? data.share_to_feed : false,
       thumbnail_timestamp: data.thumbnail_timestamp,
       privacy_level: normalizedPlatform === "tiktok" ? (data.privacy_level ?? "PUBLIC") : null,
@@ -77,7 +83,67 @@ export const activateRecurringSchedule = createServerFn({ method: "POST" })
       is_active: true,
     }).select("*").single();
     if (error) throw new Error(error.message);
+    if (data.mode === "multiple") {
+      const { error: itemError } = await context.supabase.from("recurring_schedule_items").insert(data.items.map((item, index) => ({ schedule_id: row.id, position: index + 1, media_url: item.media_url, caption: item.caption })));
+      if (itemError) throw new Error(itemError.message);
+    }
     return row;
+  });
+
+export const listRecurringScheduleItems = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ schedule_id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: rows, error } = await context.supabase.from("recurring_schedule_items").select("*").eq("schedule_id", data.schedule_id).order("position", { ascending: true });
+    if (error) throw new Error(error.message);
+    const { data: schedule } = await context.supabase.from("recurring_schedules").select("id").eq("id", data.schedule_id).eq("user_id", context.userId).maybeSingle();
+    if (!schedule) throw new Error("Recurring schedule not found");
+    return rows ?? [];
+  });
+
+export const addRecurringScheduleItem = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ schedule_id: z.string().uuid(), media_url: z.string().url().max(2000), caption: z.string().max(4000).default("") }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: schedule } = await context.supabase.from("recurring_schedules").select("id").eq("id", data.schedule_id).eq("user_id", context.userId).maybeSingle();
+    if (!schedule) throw new Error("Recurring schedule not found");
+    const { data: last } = await context.supabase.from("recurring_schedule_items").select("position").eq("schedule_id", data.schedule_id).order("position", { ascending: false }).limit(1).maybeSingle();
+    const { data: row, error } = await context.supabase.from("recurring_schedule_items").insert({ schedule_id: data.schedule_id, position: Number(last?.position ?? 0) + 1, media_url: data.media_url, caption: data.caption }).select("*").single();
+    if (error) throw new Error(error.message);
+    return row;
+  });
+
+export const deleteRecurringScheduleItem = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: item } = await context.supabase.from("recurring_schedule_items").select("id,schedule_id").eq("id", data.id).maybeSingle();
+    if (!item) throw new Error("Rotation item not found");
+    const { data: schedule } = await context.supabase.from("recurring_schedules").select("id").eq("id", item.schedule_id).eq("user_id", context.userId).maybeSingle();
+    if (!schedule) throw new Error("Recurring schedule not found");
+    const { error } = await context.supabase.from("recurring_schedule_items").delete().eq("id", data.id); if (error) throw new Error(error.message); return { ok: true };
+  });
+
+export const updateRecurringScheduleItem = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid(), media_url: z.string().url().max(2000), caption: z.string().max(4000) }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: item } = await context.supabase.from("recurring_schedule_items").select("id,schedule_id").eq("id", data.id).maybeSingle();
+    if (!item) throw new Error("Rotation item not found");
+    const { data: schedule } = await context.supabase.from("recurring_schedules").select("id").eq("id", item.schedule_id).eq("user_id", context.userId).maybeSingle();
+    if (!schedule) throw new Error("Recurring schedule not found");
+    const { data: updated, error } = await context.supabase.from("recurring_schedule_items").update({ media_url: data.media_url, caption: data.caption }).eq("id", data.id).select("*").single();
+    if (error) throw new Error(error.message); return updated;
+  });
+
+export const moveRecurringScheduleItem = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid(), direction: z.enum(["up", "down"]) }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: moved, error } = await context.supabase.rpc("move_recurring_schedule_item", { _item_id: data.id, _direction: data.direction });
+    if (error) throw new Error(error.message);
+    if (!moved) throw new Error("Rotation item not found");
+    return { ok: true };
   });
 
 export const setRecurringScheduleActive = createServerFn({ method: "POST" })

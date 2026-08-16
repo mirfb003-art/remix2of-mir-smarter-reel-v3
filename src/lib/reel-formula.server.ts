@@ -14,7 +14,7 @@ async function nextRunNumber(sb: Sb, userId: string) {
 
 export async function runReelFormulaSchedule(sb: Sb, scheduleId: string, slotKey: string) {
   const { data: schedule, error: scheduleError } = await sb.from("recurring_schedules")
-    .select("*,channels(*,buffer_credentials(*))")
+    .select("*,channels(*,buffer_credentials(*)),recurring_schedule_items(*)")
     .eq("id", scheduleId).maybeSingle();
   if (scheduleError) throw new Error(scheduleError.message);
   if (!schedule || !schedule.is_active) return { skipped: true, reason: "inactive" };
@@ -68,6 +68,12 @@ export async function runReelFormulaSchedule(sb: Sb, scheduleId: string, slotKey
     await audit(sb, { userId: schedule.user_id, runId: run.id, eventType: "formula.preflight.ok", module: "reel_formula", status: "success", payload: { connection: connection.message, schema: schema.message } });
     await sb.from("runs").update({ current_step: "formula_publish", heartbeat_at: new Date().toISOString(), step_state: { recurring_schedule_id: schedule.id, slot_key: slotKey, step: "publish" } }).eq("id", run.id);
 
+    const items = schedule.mode === "multiple" ? [...(schedule.recurring_schedule_items ?? [])].sort((a: any, b: any) => a.position - b.position) : [];
+    let rotationItem = null as any;
+    if (schedule.mode === "multiple") {
+      if (!items.length) throw new Error("Multiple-mode schedule has no rotation items");
+      rotationItem = items.find((item: any) => item.position === Number(schedule.current_item_position)) ?? items[0];
+    }
     const formulaOptions = {
       postType: schedule.post_type,
       shareToFeed: schedule.share_to_feed,
@@ -83,8 +89,8 @@ export async function runReelFormulaSchedule(sb: Sb, scheduleId: string, slotKey
       await audit(sb, { userId: schedule.user_id, runId: run.id, eventType: "formula.publish.attempt", module: "reel_formula", status: "info", attempt, payload: { schedule_id: schedule.id, slot_key: slotKey } });
       return buffer.createPost({
         channelId: channel.buffer_channel_id,
-        text: schedule.caption ?? "",
-        mediaUrl: schedule.media_url,
+          text: rotationItem?.caption ?? schedule.caption ?? "",
+          mediaUrl: rotationItem?.media_url ?? schedule.media_url,
         mode: "shareNow",
         platform: schedule.platform,
         formula: formulaOptions,
@@ -113,8 +119,11 @@ export async function runReelFormulaSchedule(sb: Sb, scheduleId: string, slotKey
     if (postError) throw new Error(`formula post history: ${postError.message}`);
     const finish = new Date().toISOString();
     await sb.from("runs").update({ status: "complete", current_step: "complete", finished_at: finish, duration_ms: Date.now() - startedAt, heartbeat_at: finish, step_state: { recurring_schedule_id: schedule.id, slot_key: slotKey, step: "complete", buffer_post_id: published.postId } }).eq("id", run.id);
-    await sb.from("recurring_schedules").update({ last_run_at: finish, last_run_id: run.id, next_run_at: nextRunAt(new Date(), Number(schedule.interval_hours)), last_error: null }).eq("id", schedule.id);
-    await audit(sb, { userId: schedule.user_id, runId: run.id, eventType: "formula.run.completed", module: "reel_formula", status: "success", durationMs: Date.now() - startedAt, payload: { post_id: published.postId, schedule_id: schedule.id } });
+    const nextPosition = schedule.mode === "multiple" && items.length
+      ? (items[(items.findIndex((item: any) => item.id === rotationItem?.id) + 1 + items.length) % items.length]?.position ?? items[0].position)
+      : schedule.current_item_position;
+    await sb.from("recurring_schedules").update({ last_run_at: finish, last_run_id: run.id, next_run_at: nextRunAt(new Date(), Number(schedule.interval_hours)), current_item_position: nextPosition, last_error: null }).eq("id", schedule.id);
+    await audit(sb, { userId: schedule.user_id, runId: run.id, eventType: "formula.run.completed", module: "reel_formula", status: "success", durationMs: Date.now() - startedAt,       payload: { post_id: published.postId, schedule_id: schedule.id, mode: schedule.mode ?? "single", rotation_item_position: rotationItem?.position ?? null } });
     return { runId: run.id, postId: published.postId };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
