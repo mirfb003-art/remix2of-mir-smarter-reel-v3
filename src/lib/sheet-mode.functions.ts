@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Json } from "@/integrations/supabase/types";
 import { normalizeBufferPlatform } from "./buffer-platforms";
 import { z } from "zod";
-import { runSheetModeCycle } from "./sheet-mode.server";
+import { nextSheetRunAt, runSheetModeCycle } from "./sheet-mode.server";
 
 const sheetId = z.string().uuid();
 const channelId = z.string().uuid();
@@ -228,7 +228,7 @@ export const createSheetModeSheet = createServerFn({ method: "POST" })
         scheduler_mode: data.scheduler_mode,
         scheduler_interval_hours: data.scheduler_interval_hours,
         daily_times: data.daily_times,
-        next_run_at: data.scheduler_mode === "manual" ? null : new Date().toISOString(),
+        next_run_at: nextSheetRunAt({ scheduler_mode: data.scheduler_mode, scheduler_interval_hours: data.scheduler_interval_hours, daily_times: data.daily_times }, new Date()),
         cloudinary_transform_enabled: data.cloudinary_transform_enabled,
         cloudinary_transform: data.cloudinary_transform,
         cloudinary_transform_mode: data.cloudinary_transform_mode,
@@ -283,7 +283,7 @@ export const updateSheetModeSheet = createServerFn({ method: "POST" })
         scheduler_mode: data.scheduler_mode,
         scheduler_interval_hours: data.scheduler_interval_hours,
         daily_times: data.daily_times,
-        next_run_at: data.scheduler_mode === "manual" ? null : new Date().toISOString(),
+        next_run_at: nextSheetRunAt({ scheduler_mode: data.scheduler_mode, scheduler_interval_hours: data.scheduler_interval_hours, daily_times: data.daily_times }, new Date()),
         cloudinary_transform_enabled: data.cloudinary_transform_enabled,
         cloudinary_transform: data.cloudinary_transform,
         cloudinary_transform_mode: data.cloudinary_transform_mode,

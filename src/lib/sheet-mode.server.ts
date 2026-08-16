@@ -68,7 +68,7 @@ const STALE_MS = 15 * 60 * 1000;
 function bucketKey(now: Date) {
   return new Date(Math.floor(now.getTime() / 300_000) * 300_000).toISOString();
 }
-function nextSheetRunAt(sheet: Pick<Sheet, "scheduler_mode" | "scheduler_interval_hours" | "daily_times">, now: Date) {
+export function nextSheetRunAt(sheet: Pick<Sheet, "scheduler_mode" | "scheduler_interval_hours" | "daily_times">, now: Date) {
   if (sheet.scheduler_mode === "manual") return null;
   if (sheet.scheduler_mode === "every_x_hours") {
     const hours = Number(sheet.scheduler_interval_hours ?? 0);

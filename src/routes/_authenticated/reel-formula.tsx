@@ -6,6 +6,7 @@ import { listCampaigns } from "@/lib/campaigns.functions";
 import { listChannels } from "@/lib/channels.functions";
 import {
   activateRecurringSchedule,
+  updateRecurringSchedule,
   deleteRecurringSchedule,
   listFormulaRunHistory,
   listRecurringSchedules,
@@ -15,6 +16,7 @@ import {
 } from "@/lib/recurring-schedules.functions";
 import { CloudinaryUpload } from "@/components/cloudinary-upload";
 import { RecurringScheduleItemsPanel } from "@/components/recurring-schedule-items-panel";
+import { FormulaScheduleEditor } from "@/components/formula-schedule-editor";
 import { useCampaignScope } from "@/components/campaign-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,7 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Pause, Play, Repeat2, Trash2 } from "lucide-react";
+import { Pause, Pencil, Play, Repeat2, Trash2 } from "lucide-react";
 import { getBufferPlatformCapabilities } from "@/lib/buffer-platforms";
 import { FormulaSchedulerFields, type FormulaSchedulerMode } from "@/components/formula-scheduler-fields";
 import { CloudinaryTransformFields } from "@/components/cloudinary-transform-fields";
@@ -47,6 +49,7 @@ function ReelFormulaPage() {
   const listChannelsFn = useServerFn(listChannels);
   const listSchedulesFn = useServerFn(listRecurringSchedules);
   const activateFn = useServerFn(activateRecurringSchedule);
+  const updateScheduleFn = useServerFn(updateRecurringSchedule);
   const setActiveFn = useServerFn(setRecurringScheduleActive);
   const runNowFn = useServerFn(runRecurringScheduleNow);
   const deleteFn = useServerFn(deleteRecurringSchedule);
@@ -81,6 +84,7 @@ function ReelFormulaPage() {
   const [startAt, setStartAt] = useState("");
   const [schedulerMode, setSchedulerMode] = useState<FormulaSchedulerMode>("every_x_hours");
   const [dailyTimes, setDailyTimes] = useState(["09:00"]);
+  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
   const [cloudinaryTransformEnabled, setCloudinaryTransformEnabled] = useState(false);
   const [cloudinaryTransform, setCloudinaryTransform] = useState("");
   const [cloudinaryTransformMode, setCloudinaryTransformMode] = useState<"replace" | "stack">("replace");
@@ -131,6 +135,11 @@ function ReelFormulaPage() {
     onError: (error) => toast.error(error instanceof Error ? error.message : "Activation failed"),
   });
 
+  const editScheduleMut = useMutation({
+    mutationFn: (value: any) => updateScheduleFn({ data: value }),
+    onSuccess: () => { toast.success("Formula settings saved"); setEditingScheduleId(null); qc.invalidateQueries({ queryKey: ["recurring-schedules"] }); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed to update formula"),
+  });
   const cloudinaryMut = useMutation({
     mutationFn: (value: { id: string; cloudinary_transform_enabled: boolean; cloudinary_transform: string; cloudinary_transform_mode: "replace" | "stack" }) => updateCloudinaryFn({ data: value }),
     onSuccess: () => { toast.success("Formula Cloudinary settings saved"); qc.invalidateQueries({ queryKey: ["recurring-schedules"] }); },
@@ -187,7 +196,7 @@ function ReelFormulaPage() {
         </CardContent>
       </Card>
 
-      <Card><CardHeader><CardTitle>Active formulas</CardTitle><CardDescription>Pause, resume, or delete recurring formulas. Each formula runs independently from the main adaptive loop.</CardDescription></CardHeader><CardContent>{!schedules?.length ? <div className="text-sm text-muted-foreground">No formulas activated yet.</div> : <div className="space-y-3">{schedules.map((schedule: any) => <div key={schedule.id} className="flex flex-wrap items-center gap-3 rounded-md border p-3"><div className="min-w-0 flex-1"><div className="font-medium">{schedule.channels?.name ?? "Channel"} · {schedule.platform} {schedule.post_type}</div><div className="text-xs text-muted-foreground truncate">Every {schedule.interval_hours}h · next {new Date(schedule.next_run_at).toLocaleString()} · {schedule.media_url}</div>{schedule.last_error && <div className="text-xs text-destructive">{schedule.last_error}</div>}{schedule.mode === "multiple" && <RecurringScheduleItemsPanel scheduleId={schedule.id} />}<div className="mt-3"><CloudinaryTransformFields enabled={Boolean(schedule.cloudinary_transform_enabled)} transformation={schedule.cloudinary_transform ?? ""} mode={schedule.cloudinary_transform_mode === "stack" ? "stack" : "replace"} sampleUrl={schedule.media_url} onEnabledChange={(cloudinary_transform_enabled) => cloudinaryMut.mutate({ id: schedule.id, cloudinary_transform_enabled, cloudinary_transform: schedule.cloudinary_transform ?? "", cloudinary_transform_mode: schedule.cloudinary_transform_mode === "stack" ? "stack" : "replace" })} onTransformationChange={(cloudinary_transform) => cloudinaryMut.mutate({ id: schedule.id, cloudinary_transform_enabled: Boolean(schedule.cloudinary_transform_enabled), cloudinary_transform, cloudinary_transform_mode: schedule.cloudinary_transform_mode === "stack" ? "stack" : "replace" })} onModeChange={(cloudinary_transform_mode) => cloudinaryMut.mutate({ id: schedule.id, cloudinary_transform_enabled: Boolean(schedule.cloudinary_transform_enabled), cloudinary_transform: schedule.cloudinary_transform ?? "", cloudinary_transform_mode })} /></div></div><Badge variant={schedule.is_active ? "default" : "secondary"}>{schedule.is_active ? "active" : "paused"}</Badge>{schedule.scheduler_mode === "manual" && <Button size="sm" variant="outline" onClick={() => runNowFn({ data: { id: schedule.id } }).then(() => { toast.success("Formula published"); qc.invalidateQueries({ queryKey: ["recurring-schedules"] }); }).catch((error) => toast.error(error instanceof Error ? error.message : "Publish failed"))}>Publish next</Button>}<Button size="icon" variant="ghost" title={schedule.is_active ? "Pause" : "Resume"} onClick={() => activeMut.mutate({ id: schedule.id, is_active: !schedule.is_active })}>{schedule.is_active ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}</Button><Button size="icon" variant="ghost" title="Delete" onClick={() => deleteMut.mutate(schedule.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)}</div>}</CardContent></Card>
+      <Card><CardHeader><CardTitle>Active formulas</CardTitle><CardDescription>Pause, resume, or delete recurring formulas. Each formula runs independently from the main adaptive loop.</CardDescription></CardHeader><CardContent>{!schedules?.length ? <div className="text-sm text-muted-foreground">No formulas activated yet.</div> : <div className="space-y-3">{schedules.map((schedule: any) => <div key={schedule.id} className="flex flex-wrap items-center gap-3 rounded-md border p-3"><div className="min-w-0 flex-1"><div className="font-medium">{schedule.channels?.name ?? "Channel"} · {schedule.platform} {schedule.post_type}</div><div className="text-xs text-muted-foreground truncate">Every {schedule.interval_hours}h · next {new Date(schedule.next_run_at).toLocaleString()} · {schedule.media_url}</div>{schedule.last_error && <div className="text-xs text-destructive">{schedule.last_error}</div>}{schedule.mode === "multiple" && <RecurringScheduleItemsPanel scheduleId={schedule.id} />}<div className="mt-3"><CloudinaryTransformFields enabled={Boolean(schedule.cloudinary_transform_enabled)} transformation={schedule.cloudinary_transform ?? ""} mode={schedule.cloudinary_transform_mode === "stack" ? "stack" : "replace"} sampleUrl={schedule.media_url} onEnabledChange={(cloudinary_transform_enabled) => cloudinaryMut.mutate({ id: schedule.id, cloudinary_transform_enabled, cloudinary_transform: schedule.cloudinary_transform ?? "", cloudinary_transform_mode: schedule.cloudinary_transform_mode === "stack" ? "stack" : "replace" })} onTransformationChange={(cloudinary_transform) => cloudinaryMut.mutate({ id: schedule.id, cloudinary_transform_enabled: Boolean(schedule.cloudinary_transform_enabled), cloudinary_transform, cloudinary_transform_mode: schedule.cloudinary_transform_mode === "stack" ? "stack" : "replace" })} onModeChange={(cloudinary_transform_mode) => cloudinaryMut.mutate({ id: schedule.id, cloudinary_transform_enabled: Boolean(schedule.cloudinary_transform_enabled), cloudinary_transform: schedule.cloudinary_transform ?? "", cloudinary_transform_mode })} /></div>{editingScheduleId === schedule.id && <FormulaScheduleEditor schedule={schedule} channels={channels ?? []} onCancel={() => setEditingScheduleId(null)} onSave={(value) => editScheduleMut.mutate(value)} />}</div><Button size="icon" variant="ghost" title="Edit" onClick={() => setEditingScheduleId(editingScheduleId === schedule.id ? null : schedule.id)}><Pencil className="h-4 w-4" /></Button><Badge variant={schedule.is_active ? "default" : "secondary"}>{schedule.is_active ? "active" : "paused"}</Badge>{schedule.scheduler_mode === "manual" && <Button size="sm" variant="outline" onClick={() => runNowFn({ data: { id: schedule.id } }).then(() => { toast.success("Formula published"); qc.invalidateQueries({ queryKey: ["recurring-schedules"] }); }).catch((error) => toast.error(error instanceof Error ? error.message : "Publish failed"))}>Publish next</Button>}<Button size="icon" variant="ghost" title={schedule.is_active ? "Pause" : "Resume"} onClick={() => activeMut.mutate({ id: schedule.id, is_active: !schedule.is_active })}>{schedule.is_active ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}</Button><Button size="icon" variant="ghost" title="Delete" onClick={() => deleteMut.mutate(schedule.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>)}</div>}</CardContent></Card>
 
       <Card><CardHeader><CardTitle>Recent formula runs</CardTitle><CardDescription>Formula publishes are logged to the shared runs and audit history with the `1_reel_formula` marker.</CardDescription></CardHeader><CardContent>{!history?.length ? <div className="text-sm text-muted-foreground">No formula runs yet.</div> : <div className="space-y-2">{history.map((run: any) => <div key={run.id} className="flex flex-wrap items-center gap-3 rounded-md border p-3 text-sm"><Badge variant={run.status === "complete" ? "default" : run.status === "failed" ? "destructive" : "secondary"}>{run.status}</Badge><span>{new Date(run.started_at).toLocaleString()}</span><span className="text-muted-foreground">{run.published_posts?.[0]?.permalink ?? run.error ?? "No proof yet"}</span></div>)}</div>}</CardContent></Card>
     </div>

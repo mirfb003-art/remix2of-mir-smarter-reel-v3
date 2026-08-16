@@ -119,6 +119,63 @@ export const activateRecurringSchedule = createServerFn({ method: "POST" })
     return row;
   });
 
+const formulaEditSchema = z.object({
+  id: z.string().uuid(),
+  channel_id: z.string().uuid(),
+  platform,
+  post_type: postType,
+  media_url: z.string().url().max(2000),
+  caption: z.string().max(4000),
+  thumbnail_timestamp: z.number().min(0).max(86400),
+  privacy_level: z.enum(["PUBLIC", "MUTUAL_FOLLOWS", "SELF_ONLY"]).nullable(),
+  share_to_feed: z.boolean(),
+  allow_comments: z.boolean(),
+  allow_duet: z.boolean(),
+  allow_stitch: z.boolean(),
+  interval_hours: z.number().int().min(1).max(8760),
+  scheduler_mode: z.enum(["every_x_hours", "daily_times", "manual"]),
+  daily_times: z.array(z.string().regex(/^([01]\\d|2[0-3]):[0-5]\\d$/)),
+  start_at: z.string().datetime().nullable(),
+  cloudinary_transform_enabled: z.boolean(),
+  cloudinary_transform: z.string().max(1000),
+  cloudinary_transform_mode: z.enum(["replace", "stack"]),
+});
+
+export const updateRecurringSchedule = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => formulaEditSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: schedule, error: scheduleError } = await context.supabase.from("recurring_schedules").select("id,mode").eq("id", data.id).eq("user_id", context.userId).maybeSingle();
+    if (scheduleError) throw new Error(scheduleError.message);
+    if (!schedule) throw new Error("Recurring schedule not found");
+    await assertOwner(context.supabase, context.userId, null, data.channel_id, data.platform);
+    const nextRun = initialFormulaNextRun(data.scheduler_mode, data.daily_times, data.interval_hours, data.start_at);
+    const { data: updated, error } = await context.supabase.from("recurring_schedules").update({
+      channel_id: data.channel_id,
+      platform: data.platform,
+      post_type: data.post_type,
+      media_url: data.media_url,
+      caption: data.caption,
+      thumbnail_timestamp: data.thumbnail_timestamp,
+      privacy_level: data.privacy_level,
+      share_to_feed: data.share_to_feed,
+      allow_comments: data.allow_comments,
+      allow_duet: data.allow_duet,
+      allow_stitch: data.allow_stitch,
+      interval_hours: data.interval_hours,
+      scheduler_mode: data.scheduler_mode,
+      daily_times: data.daily_times,
+      start_at: data.start_at,
+      next_run_at: nextRun,
+      cloudinary_transform_enabled: data.cloudinary_transform_enabled,
+      cloudinary_transform: data.cloudinary_transform,
+      cloudinary_transform_mode: data.cloudinary_transform_mode,
+      last_error: null,
+    }).eq("id", data.id).eq("user_id", context.userId).select("*").single();
+    if (error) throw new Error(error.message);
+    return updated;
+  });
+
 export const updateRecurringScheduleCloudinaryTransform = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({
