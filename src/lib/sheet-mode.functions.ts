@@ -36,6 +36,9 @@ const sheetSettingsSchema = z.object({
   scheduler_mode: z.enum(["every_x_hours", "daily_times", "manual"]).default("every_x_hours"),
   scheduler_interval_hours: z.number().int().min(0).max(8760).default(0),
   daily_times: z.array(z.string().regex(/^([01]\\d|2[0-3]):[0-5]\\d$/)).default([]),
+  cloudinary_transform_enabled: z.boolean().default(false),
+  cloudinary_transform: z.string().max(1000).default(""),
+  cloudinary_transform_mode: z.enum(["replace", "stack"]).default("replace"),
 });
 
 const customizationSchema = z.record(z.string(), z.any()).default({});
@@ -226,6 +229,9 @@ export const createSheetModeSheet = createServerFn({ method: "POST" })
         scheduler_interval_hours: data.scheduler_interval_hours,
         daily_times: data.daily_times,
         next_run_at: data.scheduler_mode === "manual" ? null : new Date().toISOString(),
+        cloudinary_transform_enabled: data.cloudinary_transform_enabled,
+        cloudinary_transform: data.cloudinary_transform,
+        cloudinary_transform_mode: data.cloudinary_transform_mode,
         is_enabled: true,
       })
       .select("id,name")
@@ -278,6 +284,9 @@ export const updateSheetModeSheet = createServerFn({ method: "POST" })
         scheduler_interval_hours: data.scheduler_interval_hours,
         daily_times: data.daily_times,
         next_run_at: data.scheduler_mode === "manual" ? null : new Date().toISOString(),
+        cloudinary_transform_enabled: data.cloudinary_transform_enabled,
+        cloudinary_transform: data.cloudinary_transform,
+        cloudinary_transform_mode: data.cloudinary_transform_mode,
       })
       .eq("id", data.id)
       .eq("user_id", context.userId);

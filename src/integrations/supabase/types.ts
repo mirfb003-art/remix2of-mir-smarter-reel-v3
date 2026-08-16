@@ -1708,6 +1708,9 @@ export type Database = {
           created_at: string
           custom_schedule_at: string | null
           custom_schedule_offset_minutes: number | null
+          cloudinary_transform_enabled: boolean
+          cloudinary_transform: string
+          cloudinary_transform_mode: string
           id: string
           is_enabled: boolean
           name: string
@@ -1731,6 +1734,9 @@ export type Database = {
           created_at?: string
           custom_schedule_at?: string | null
           custom_schedule_offset_minutes?: number | null
+          cloudinary_transform_enabled?: boolean
+          cloudinary_transform?: string
+          cloudinary_transform_mode?: string
           id?: string
           is_enabled?: boolean
           name: string
@@ -1754,6 +1760,9 @@ export type Database = {
           created_at?: string
           custom_schedule_at?: string | null
           custom_schedule_offset_minutes?: number | null
+          cloudinary_transform_enabled?: boolean
+          cloudinary_transform?: string
+          cloudinary_transform_mode?: string
           id?: string
           is_enabled?: boolean
           name?: string

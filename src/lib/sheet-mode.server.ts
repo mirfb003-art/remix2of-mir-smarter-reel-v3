@@ -1,5 +1,6 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { applyCloudinaryTransform, isCloudinaryDeliveryUrl } from "./cloudinary-transform";
 import { makeBufferClient, resolveBufferCredential } from "./buffer.server";
 import { audit, makeIdempotencyKey, withRetry } from "./reliability.server";
 
@@ -23,6 +24,9 @@ type Sheet = {
   scheduler_interval_hours: number;
   daily_times: string[];
   next_run_at: string | null;
+  cloudinary_transform_enabled: boolean;
+  cloudinary_transform: string;
+  cloudinary_transform_mode: "replace" | "stack";
 };
 type Target = {
   id: string;
@@ -282,13 +286,19 @@ async function publishChannel(
     const schema = await buffer.verifySchema();
     if (!schema.ok || !schema.hasCreatePost)
       throw new Error(`Buffer schema pre-flight failed: ${schema.message}`);
+    let publishMediaUrl = row.video_url;
+    if (sheet.cloudinary_transform_enabled && isCloudinaryDeliveryUrl(row.video_url)) {
+      const transformed = applyCloudinaryTransform(row.video_url, sheet.cloudinary_transform, sheet.cloudinary_transform_mode);
+      if (transformed.error) throw new Error(`Cloudinary transformation failed: ${transformed.error}`);
+      publishMediaUrl = transformed.url;
+    }
     const published = await withRetry(
       "buffer",
       (attempt) => {
         return buffer.createPost({
           channelId: channel.buffer_channel_id,
           text: row.caption,
-          mediaUrl: row.video_url,
+          mediaUrl: publishMediaUrl,
           mode: sheet.publish_mode,
           dueAt: resolveSheetDueAt(sheet),
           platform: target.platform,
