@@ -1141,8 +1141,6 @@ export type Database = {
           last_run_at: string | null
           last_run_id: string | null
           media_url: string
-          mode: string
-          current_item_position: number
           next_run_at: string
           platform: string
           post_type: string
@@ -1169,8 +1167,6 @@ export type Database = {
           last_run_at?: string | null
           last_run_id?: string | null
           media_url: string
-          mode?: string
-          current_item_position?: number
           next_run_at: string
           platform: string
           post_type: string
@@ -1197,8 +1193,6 @@ export type Database = {
           last_run_at?: string | null
           last_run_id?: string | null
           media_url?: string
-          mode?: string
-          current_item_position?: number
           next_run_at?: string
           platform?: string
           post_type?: string
@@ -1229,44 +1223,6 @@ export type Database = {
             columns: ["last_run_id"]
             isOneToOne: false
             referencedRelation: "runs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      recurring_schedule_items: {
-        Row: {
-          id: string
-          schedule_id: string
-          position: number
-          media_url: string
-          caption: string
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          schedule_id: string
-          position: number
-          media_url: string
-          caption?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          schedule_id?: string
-          position?: number
-          media_url?: string
-          caption?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "recurring_schedule_items_schedule_id_fkey"
-            columns: ["schedule_id"]
-            isOneToOne: false
-            referencedRelation: "recurring_schedules"
             referencedColumns: ["id"]
           },
         ]
@@ -1995,10 +1951,6 @@ export type Database = {
           _row_id: string
           _stale_before: string
         }
-        Returns: boolean
-      }
-      move_recurring_schedule_item: {
-        Args: { _direction: string; _item_id: string }
         Returns: boolean
       }
       release_channel_lock: {
