@@ -21,6 +21,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { CloudinaryUpload } from "@/components/cloudinary-upload";
+import { ContentGalleryPanel } from "@/components/content-gallery-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -270,15 +271,18 @@ function SheetModePage() {
   });
   if (sheetId && detail.data?.sheet)
     return (
-      <SheetGrid
-        sheet={detail.data.sheet}
-        targets={(detail.data.channel_targets ?? []) as Target[]}
-        rows={(detail.data.rows ?? []) as Row[]}
-        channels={channels as any[]}
-        onBack={() => setSheetId(null)}
-        refresh={refresh}
-        onSettingsSaved={(values) => updateSettings({ data: { id: sheetId, ...values } })}
-      />
+      <div className="space-y-4">
+        <SheetGrid
+          sheet={detail.data.sheet}
+          targets={(detail.data.channel_targets ?? []) as Target[]}
+          rows={(detail.data.rows ?? []) as Row[]}
+          channels={channels as any[]}
+          onBack={() => setSheetId(null)}
+          refresh={refresh}
+          onSettingsSaved={(values) => updateSettings({ data: { id: sheetId, ...values } })}
+        />
+        <ContentGalleryPanel />
+      </div>
     );
   const action = (p: Promise<unknown>, text?: string) =>
     p
@@ -1140,7 +1144,7 @@ function GridRow({
               onBlur={save}
               placeholder="https://…"
             />
-            <CloudinaryUpload onUploaded={(uploadedUrl) => { setUrl(uploadedUrl); updateRow({ id: row.id, caption, video_url: uploadedUrl, priority: row.priority, weight: row.weight }); }} />
+            <CloudinaryUpload onUploaded={(uploadedUrl) => { setUrl(uploadedUrl); updateRow({ id: row.id, caption, video_url: uploadedUrl, priority: row.priority, weight: row.weight }); }} onSelectExisting={(uploadedUrl) => { setUrl(uploadedUrl); updateRow({ id: row.id, caption, video_url: uploadedUrl, priority: row.priority, weight: row.weight }); }} />
           </div>
         </div>
       </td>

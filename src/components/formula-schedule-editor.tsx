@@ -55,7 +55,7 @@ export function FormulaScheduleEditor({ schedule, channels, onSave, onCancel }: 
       <div className="space-y-1"><Label>Post type</Label><Select value={postType} onValueChange={setPostType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{platform === "instagram" ? <><SelectItem value="reel">Reel</SelectItem><SelectItem value="story">Story</SelectItem></> : <><SelectItem value="video">Video</SelectItem><SelectItem value="story">Story</SelectItem></>}</SelectContent></Select></div>
     </div>
     {schedule.mode === "multiple" ? <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">This is a Multiple/rotation formula. Rotation media, captions, order, and `last_published_item_id` are managed separately below and are not changed by this general settings edit.</div> : <>
-      <div className="space-y-1"><Label>Media URL</Label><Input type="url" value={mediaUrl} onChange={(event) => setMediaUrl(event.target.value)} /><CloudinaryUpload onUploaded={setMediaUrl} /></div>
+      <div className="space-y-1"><Label>Media URL</Label><Input type="url" value={mediaUrl} onChange={(event) => setMediaUrl(event.target.value)} /><CloudinaryUpload onUploaded={setMediaUrl} onSelectExisting={setMediaUrl} /></div>
       <div className="space-y-1"><Label>Caption</Label><Textarea value={caption} onChange={(event) => setCaption(event.target.value)} disabled={platform === "instagram" && postType === "story"} /></div>
     </>}
     <div className="grid gap-4 md:grid-cols-2">

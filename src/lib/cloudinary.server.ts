@@ -24,7 +24,7 @@ function signature(params: Record<string, string>, secret: string) {
 export const uploadCloudinaryFile = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => d as FormData)
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const file = data.get("file");
     if (!(file instanceof File)) throw new Error("A file is required");
     const isImage = ALLOWED_IMAGE.test(file.type);
@@ -44,7 +44,13 @@ export const uploadCloudinaryFile = createServerFn({ method: "POST" })
     const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/${resource}/upload`, { method: "POST", body: form });
     const body = await response.json() as { secure_url?: string; error?: { message?: string } };
     if (!response.ok || !body.secure_url) throw new Error(body.error?.message ?? "Cloudinary upload failed");
-    return { url: body.secure_url, resourceType: resource, bytes: file.size, contentType: file.type };
+    const { error: galleryError } = await context.supabase.from("content_gallery_items").insert({
+      user_id: context.userId,
+      url: body.secure_url,
+      label: null,
+      media_type: resource === "video" ? "video" : "image",
+    });
+    return { url: body.secure_url, resourceType: resource, bytes: file.size, contentType: file.type, gallery_saved: !galleryError };
   });
 
 export const cloudinaryUploadLimits = { maxImageBytes: MAX_IMAGE_BYTES, maxVideoBytes: MAX_VIDEO_BYTES } as const;

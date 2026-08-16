@@ -898,6 +898,33 @@ export type Database = {
           },
         ]
       }
+      content_gallery_items: {
+        Row: {
+          id: string
+          user_id: string
+          url: string
+          label: string | null
+          media_type: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          url: string
+          label?: string | null
+          media_type: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          url?: string
+          label?: string | null
+          media_type?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       predictions: {
         Row: {
           accuracy_score: number | null
