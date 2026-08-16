@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { SheetModeCustomizationEditor } from "@/components/sheet-mode-customization-editor";
+import { SheetModeSettingsEditor } from "@/components/sheet-mode-settings-editor";
 import { Textarea } from "@/components/ui/textarea";
 import {
   addSheetModeChannelTargets,
@@ -44,6 +45,7 @@ import {
   deleteSheetModeRow,
   deleteSheetModeSheet,
   getSheetModeSheet,
+  updateSheetModeSheet,
   importSheetModeRows,
   listSheetModeWorkspace,
   removeDuplicateSheetModeRows,
@@ -213,7 +215,8 @@ function SheetModePage() {
     create = useServerFn(createSheetModeSheet),
     del = useServerFn(deleteSheetModeSheet),
     toggle = useServerFn(setSheetModeEnabled),
-    get = useServerFn(getSheetModeSheet);
+    get = useServerFn(getSheetModeSheet),
+    updateSettings = useServerFn(updateSheetModeSheet);
   const qc = useQueryClient();
   const [sheetId, setSheetId] = useState<string | null>(null);
   const [settings, setSettings] = useState(DEFAULT);
@@ -260,6 +263,7 @@ function SheetModePage() {
         channels={channels as any[]}
         onBack={() => setSheetId(null)}
         refresh={refresh}
+        onSettingsSaved={(values) => updateSettings({ data: { id: sheetId, ...values } })}
       />
     );
   const action = (p: Promise<unknown>, text?: string) =>
@@ -505,6 +509,7 @@ function SheetGrid({
   channels,
   onBack,
   refresh,
+  onSettingsSaved,
 }: {
   sheet: any;
   targets: Target[];
@@ -512,6 +517,7 @@ function SheetGrid({
   channels: any[];
   onBack: () => void;
   refresh: () => void;
+  onSettingsSaved: (values: any) => Promise<unknown>;
 }) {
   const addTarget = useServerFn(addSheetModeChannelTargets),
     removeTarget = useServerFn(removeSheetModeChannelTarget),
@@ -546,6 +552,7 @@ function SheetGrid({
   const [fillValue, setFillValue] = useState("");
   const [customizationTarget, setCustomizationTarget] = useState<string | null>(null);
   const [customizationDraft, setCustomizationDraft] = useState<Record<string, any>>({});
+  const [editingSettings, setEditingSettings] = useState(false);
   const active = targets.filter((t) => t.is_active);
   const run = (p: Promise<unknown>, text?: string) =>
     p
@@ -611,6 +618,7 @@ function SheetGrid({
   };
   return (
     <div className="space-y-5 max-w-[1500px]">
+      {editingSettings && <SheetModeSettingsEditor initial={{ name: sheet.name, publish_mode: sheet.publish_mode, custom_schedule_offset_minutes: sheet.custom_schedule_offset_minutes, custom_schedule_at: sheet.custom_schedule_at, rows_per_run: sheet.rows_per_run, schedule_label: sheet.schedule_label, selection_rule: sheet.selection_rule, after_publish_mark_status: sheet.after_publish_mark_status, after_publish_save_post_id: sheet.after_publish_save_post_id, after_publish_save_time: sheet.after_publish_save_time, after_publish_save_url: sheet.after_publish_save_url, retry_failed: sheet.retry_failed }} onCancel={() => setEditingSettings(false)} onSave={(values) => { onSettingsSaved(values).then(() => { toast.success("Sheet settings saved"); setEditingSettings(false); refresh(); }).catch((error) => toast.error(msg(error))); }} />}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Button variant="ghost" size="sm" className="-ml-2 mb-2" onClick={onBack}>
@@ -623,14 +631,7 @@ function SheetGrid({
           </p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() =>
-              toast.info("Settings editing remains in the Sheet Mode settings surface.")
-            }
-          >
-            <Settings2 className="h-4 w-4 mr-2" /> Settings
-          </Button>
+          <Button variant="outline" onClick={() => setEditingSettings((value) => !value)}><Settings2 className="h-4 w-4 mr-2" /> Settings</Button>
           <Button
             onClick={() =>
               run(
@@ -662,7 +663,7 @@ function SheetGrid({
               <Textarea value={fillValue} onChange={(e) => setFillValue(e.target.value)} placeholder={fillMode === "caption" ? "Caption one\nCaption two" : "https://example.com/one.mp4\nhttps://example.com/two.mp4"} />
               <div className="flex gap-2">
                 <Button onClick={() => {
-                  const lines = fillValue.split(/\\r?\\n/);
+                  const lines = fillValue.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
                   const request = fillMode === "caption" ? fillCaptions({ data: { sheet_id: sheet.id, lines } }) : fillUrls({ data: { sheet_id: sheet.id, lines } });
                   request.then((result) => { toast.success(`Filled ${result.filled}, created ${result.created}, skipped ${result.skipped}`); setFillMode(null); refresh(); }).catch((e) => toast.error(msg(e)));
                 }} disabled={!fillValue.trim()}>Apply</Button>
