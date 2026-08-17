@@ -292,8 +292,8 @@ export type Database = {
       campaigns: {
         Row: {
           channel_mode: string
-          cloudinary_transform_enabled: boolean
           cloudinary_transform: string
+          cloudinary_transform_enabled: boolean
           cloudinary_transform_mode: string
           created_at: string
           custom_objective: string | null
@@ -313,8 +313,8 @@ export type Database = {
         }
         Insert: {
           channel_mode?: string
-          cloudinary_transform_enabled?: boolean
           cloudinary_transform?: string
+          cloudinary_transform_enabled?: boolean
           cloudinary_transform_mode?: string
           created_at?: string
           custom_objective?: string | null
@@ -334,8 +334,8 @@ export type Database = {
         }
         Update: {
           channel_mode?: string
-          cloudinary_transform_enabled?: boolean
           cloudinary_transform?: string
+          cloudinary_transform_enabled?: boolean
           cloudinary_transform_mode?: string
           created_at?: string
           custom_objective?: string | null
@@ -480,6 +480,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      content_gallery_items: {
+        Row: {
+          created_at: string
+          id: string
+          label: string | null
+          media_type: string
+          url: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label?: string | null
+          media_type: string
+          url: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string | null
+          media_type?: string
+          url?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       insight_trends: {
         Row: {
@@ -898,33 +925,6 @@ export type Database = {
           },
         ]
       }
-      content_gallery_items: {
-        Row: {
-          id: string
-          user_id: string
-          url: string
-          label: string | null
-          media_type: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          url: string
-          label?: string | null
-          media_type: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          url?: string
-          label?: string | null
-          media_type?: string
-          created_at?: string
-        }
-        Relationships: []
-      }
       predictions: {
         Row: {
           accuracy_score: number | null
@@ -1204,29 +1204,28 @@ export type Database = {
           allow_duet: boolean
           allow_stitch: boolean
           campaign_id: string | null
-          cloudinary_transform_enabled: boolean
-          cloudinary_transform: string
-          cloudinary_transform_mode: string
           caption: string
           channel_id: string
+          cloudinary_transform: string
+          cloudinary_transform_enabled: boolean
+          cloudinary_transform_mode: string
           created_at: string
-          current_item_position: number
+          daily_times: Json
           id: string
           interval_hours: number
           is_active: boolean
           last_claimed_slot: string | null
           last_error: string | null
+          last_published_item_id: string | null
           last_run_at: string | null
           last_run_id: string | null
           media_url: string
           mode: string
-          last_published_item_id: string | null
-          scheduler_mode: string
-          daily_times: Json
           next_run_at: string | null
           platform: string
           post_type: string
           privacy_level: string | null
+          scheduler_mode: string
           share_to_feed: boolean
           start_at: string | null
           thumbnail_timestamp: number
@@ -1238,29 +1237,28 @@ export type Database = {
           allow_duet?: boolean
           allow_stitch?: boolean
           campaign_id?: string | null
-          cloudinary_transform_enabled?: boolean
-          cloudinary_transform?: string
-          cloudinary_transform_mode?: string
           caption?: string
           channel_id: string
+          cloudinary_transform?: string
+          cloudinary_transform_enabled?: boolean
+          cloudinary_transform_mode?: string
           created_at?: string
-          current_item_position?: number
+          daily_times?: Json
           id?: string
           interval_hours: number
           is_active?: boolean
           last_claimed_slot?: string | null
           last_error?: string | null
+          last_published_item_id?: string | null
           last_run_at?: string | null
           last_run_id?: string | null
           media_url: string
           mode?: string
-          last_published_item_id?: string | null
-          scheduler_mode?: string
-          daily_times?: Json
           next_run_at?: string | null
           platform: string
           post_type: string
           privacy_level?: string | null
+          scheduler_mode?: string
           share_to_feed?: boolean
           start_at?: string | null
           thumbnail_timestamp?: number
@@ -1272,29 +1270,28 @@ export type Database = {
           allow_duet?: boolean
           allow_stitch?: boolean
           campaign_id?: string | null
-          cloudinary_transform_enabled?: boolean
-          cloudinary_transform?: string
-          cloudinary_transform_mode?: string
           caption?: string
           channel_id?: string
+          cloudinary_transform?: string
+          cloudinary_transform_enabled?: boolean
+          cloudinary_transform_mode?: string
           created_at?: string
-          current_item_position?: number
+          daily_times?: Json
           id?: string
           interval_hours?: number
           is_active?: boolean
           last_claimed_slot?: string | null
           last_error?: string | null
+          last_published_item_id?: string | null
           last_run_at?: string | null
           last_run_id?: string | null
           media_url?: string
           mode?: string
-          last_published_item_id?: string | null
-          scheduler_mode?: string
-          daily_times?: Json
           next_run_at?: string | null
           platform?: string
           post_type?: string
           privacy_level?: string | null
+          scheduler_mode?: string
           share_to_feed?: boolean
           start_at?: string | null
           thumbnail_timestamp?: number
@@ -1314,6 +1311,13 @@ export type Database = {
             columns: ["channel_id"]
             isOneToOne: false
             referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_schedules_last_published_item_fk"
+            columns: ["last_published_item_id"]
+            isOneToOne: false
+            referencedRelation: "recurring_schedule_items"
             referencedColumns: ["id"]
           },
           {
@@ -1750,23 +1754,23 @@ export type Database = {
           after_publish_save_post_id: boolean
           after_publish_save_time: boolean
           after_publish_save_url: boolean
+          cloudinary_transform: string
+          cloudinary_transform_enabled: boolean
+          cloudinary_transform_mode: string
           created_at: string
           custom_schedule_at: string | null
           custom_schedule_offset_minutes: number | null
-          cloudinary_transform_enabled: boolean
-          cloudinary_transform: string
-          cloudinary_transform_mode: string
+          daily_times: Json
           id: string
           is_enabled: boolean
           name: string
+          next_run_at: string | null
           publish_mode: string
           retry_failed: boolean
-          scheduler_mode: string
-          scheduler_interval_hours: number
-          daily_times: Json
-          next_run_at: string | null
           rows_per_run: number
           schedule_label: string | null
+          scheduler_interval_hours: number
+          scheduler_mode: string
           selection_rule: string
           updated_at: string
           user_id: string
@@ -1776,23 +1780,23 @@ export type Database = {
           after_publish_save_post_id?: boolean
           after_publish_save_time?: boolean
           after_publish_save_url?: boolean
+          cloudinary_transform?: string
+          cloudinary_transform_enabled?: boolean
+          cloudinary_transform_mode?: string
           created_at?: string
           custom_schedule_at?: string | null
           custom_schedule_offset_minutes?: number | null
-          cloudinary_transform_enabled?: boolean
-          cloudinary_transform?: string
-          cloudinary_transform_mode?: string
+          daily_times?: Json
           id?: string
           is_enabled?: boolean
           name: string
+          next_run_at?: string | null
           publish_mode?: string
           retry_failed?: boolean
-          scheduler_mode?: string
-          scheduler_interval_hours?: number
-          daily_times?: Json
-          next_run_at?: string | null
           rows_per_run?: number
           schedule_label?: string | null
+          scheduler_interval_hours?: number
+          scheduler_mode?: string
           selection_rule?: string
           updated_at?: string
           user_id: string
@@ -1802,23 +1806,23 @@ export type Database = {
           after_publish_save_post_id?: boolean
           after_publish_save_time?: boolean
           after_publish_save_url?: boolean
+          cloudinary_transform?: string
+          cloudinary_transform_enabled?: boolean
+          cloudinary_transform_mode?: string
           created_at?: string
           custom_schedule_at?: string | null
           custom_schedule_offset_minutes?: number | null
-          cloudinary_transform_enabled?: boolean
-          cloudinary_transform?: string
-          cloudinary_transform_mode?: string
+          daily_times?: Json
           id?: string
           is_enabled?: boolean
           name?: string
+          next_run_at?: string | null
           publish_mode?: string
           retry_failed?: boolean
-          scheduler_mode?: string
-          scheduler_interval_hours?: number
-          daily_times?: Json
-          next_run_at?: string | null
           rows_per_run?: number
           schedule_label?: string | null
+          scheduler_interval_hours?: number
+          scheduler_mode?: string
           selection_rule?: string
           updated_at?: string
           user_id?: string
@@ -2073,7 +2077,7 @@ export type Database = {
         Returns: boolean
       }
       claim_sheet_mode_schedule: {
-        Args: { _next_run_at: string | null; _now: string; _sheet_id: string }
+        Args: { _next_run_at: string; _now: string; _sheet_id: string }
         Returns: boolean
       }
       move_recurring_schedule_item: {
