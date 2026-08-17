@@ -6,6 +6,12 @@ import { runReelFormulaSchedule } from "./reel-formula.server";
 
 const platform = z.enum(["instagram", "tiktok"]);
 const postType = z.enum(["reel", "story", "video"]);
+const publishMode = z.enum(["shareNow", "addToQueue", "customScheduled"]);
+function validatePublishMode(value: { publish_mode: string; custom_schedule_offset_minutes: number | null; custom_schedule_at: string | null }, ctx: z.RefinementCtx) {
+  if (value.publish_mode === "customScheduled" && value.custom_schedule_offset_minutes == null && value.custom_schedule_at == null) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["custom_schedule_at"], message: "Custom scheduling requires a relative offset or specific time" });
+  }
+}
 const scheduleInput = z.object({
   campaign_id: z.string().uuid().nullable().optional(),
   channel_id: z.string().uuid(),
@@ -22,6 +28,9 @@ const scheduleInput = z.object({
   allow_duet: z.boolean().default(false),
   allow_stitch: z.boolean().default(false),
   interval_hours: z.number().int().min(1).max(8760),
+  publish_mode: publishMode.default("shareNow"),
+  custom_schedule_offset_minutes: z.number().int().min(0).max(60 * 24 * 30).nullable().default(null),
+  custom_schedule_at: z.string().datetime().nullable().default(null),
   scheduler_mode: z.enum(["every_x_hours", "daily_times", "manual"]).default("every_x_hours"),
   daily_times: z.preprocess((value) => Array.isArray(value) ? value.map((time) => String(time).trim()).filter(Boolean) : value, z.array(z.string().regex(/^([01]\\d|2[0-3]):[0-5]\\d$/)).default([])),
   start_at: z.string().datetime().nullable().optional(),
@@ -32,6 +41,7 @@ const scheduleInput = z.object({
   if (value.scheduler_mode === "daily_times" && value.daily_times.length === 0) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["daily_times"], message: "At least one daily UTC time is required" });
   }
+  validatePublishMode(value, ctx);
 });
 
 function initialFormulaNextRun(mode: string, dailyTimes: string[], intervalHours: number, startAt: string | null | undefined) {
@@ -108,6 +118,9 @@ export const activateRecurringSchedule = createServerFn({ method: "POST" })
       allow_duet: normalizedPlatform === "tiktok" ? data.allow_duet : false,
       allow_stitch: normalizedPlatform === "tiktok" ? data.allow_stitch : false,
       interval_hours: data.interval_hours,
+      publish_mode: data.publish_mode,
+      custom_schedule_offset_minutes: data.custom_schedule_offset_minutes,
+      custom_schedule_at: data.custom_schedule_at,
       start_at: data.start_at ?? null,
       next_run_at: nextRun,
       cloudinary_transform_enabled: data.cloudinary_transform_enabled,
@@ -137,12 +150,20 @@ const formulaEditSchema = z.object({
   allow_duet: z.boolean(),
   allow_stitch: z.boolean(),
   interval_hours: z.number().int().min(1).max(8760),
+  publish_mode: publishMode,
+  custom_schedule_offset_minutes: z.number().int().min(0).max(60 * 24 * 30).nullable(),
+  custom_schedule_at: z.string().datetime().nullable(),
   scheduler_mode: z.enum(["every_x_hours", "daily_times", "manual"]),
-  daily_times: z.array(z.string().regex(/^([01]\\d|2[0-3]):[0-5]\\d$/)),
+  daily_times: z.preprocess((value) => Array.isArray(value) ? value.map((time) => String(time).trim()).filter(Boolean) : value, z.array(z.string().regex(/^([01]\\d|2[0-3]):[0-5]\\d$/))),
   start_at: z.string().datetime().nullable(),
   cloudinary_transform_enabled: z.boolean(),
   cloudinary_transform: z.string().max(1000),
   cloudinary_transform_mode: z.enum(["replace", "stack"]),
+}).superRefine((value, ctx) => {
+  if (value.scheduler_mode === "daily_times" && value.daily_times.length === 0) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["daily_times"], message: "At least one daily UTC time is required" });
+  }
+  validatePublishMode(value, ctx);
 });
 
 export const updateRecurringSchedule = createServerFn({ method: "POST" })
@@ -167,6 +188,9 @@ export const updateRecurringSchedule = createServerFn({ method: "POST" })
       allow_duet: data.allow_duet,
       allow_stitch: data.allow_stitch,
       interval_hours: data.interval_hours,
+      publish_mode: data.publish_mode,
+      custom_schedule_offset_minutes: data.custom_schedule_offset_minutes,
+      custom_schedule_at: data.custom_schedule_at,
       scheduler_mode: data.scheduler_mode,
       daily_times: data.daily_times,
       start_at: data.start_at,

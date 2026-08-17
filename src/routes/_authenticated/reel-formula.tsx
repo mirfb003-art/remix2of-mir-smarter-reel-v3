@@ -34,16 +34,11 @@ import { Pause, Pencil, Play, Repeat2, Trash2 } from "lucide-react";
 import { getBufferPlatformCapabilities } from "@/lib/buffer-platforms";
 import { FormulaSchedulerFields, type FormulaSchedulerMode } from "@/components/formula-scheduler-fields";
 import { CloudinaryTransformFields } from "@/components/cloudinary-transform-fields";
+import { PublishModeFields, localInputToIso, type PublishMode } from "@/components/publish-mode-fields";
 
 export const Route = createFileRoute("/_authenticated/reel-formula")({ component: ReelFormulaPage });
 
 type Platform = "instagram" | "tiktok";
-
-function localInputToIso(value: string): string | null {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
-}
 
 function ReelFormulaPage() {
   const { campaignId } = useCampaignScope();
@@ -86,6 +81,9 @@ function ReelFormulaPage() {
   const [startAt, setStartAt] = useState("");
   const [schedulerMode, setSchedulerMode] = useState<FormulaSchedulerMode>("every_x_hours");
   const [dailyTimes, setDailyTimes] = useState(["09:00"]);
+  const [publishMode, setPublishMode] = useState<PublishMode>("shareNow");
+  const [scheduledAt, setScheduledAt] = useState("");
+  const [delayMinutes, setDelayMinutes] = useState<number | null>(null);
   const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
   const [cloudinaryTransformEnabled, setCloudinaryTransformEnabled] = useState(false);
   const [cloudinaryTransform, setCloudinaryTransform] = useState("");
@@ -120,6 +118,9 @@ function ReelFormulaPage() {
         allow_duet: allowDuet,
         allow_stitch: allowStitch,
         interval_hours: Number(intervalHours),
+        publish_mode: publishMode,
+        custom_schedule_offset_minutes: publishMode === "customScheduled" ? delayMinutes : null,
+        custom_schedule_at: publishMode === "customScheduled" && delayMinutes == null ? localInputToIso(scheduledAt) : null,
         scheduler_mode: schedulerMode,
         daily_times: dailyTimes,
         start_at: schedulerMode === "every_x_hours" && !startImmediately ? localInputToIso(startAt) : null,
@@ -192,6 +193,7 @@ function ReelFormulaPage() {
           ) : <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">Connect and select a Buffer channel before configuring the formula.</div>}
 
           <FormulaSchedulerFields mode={schedulerMode} intervalHours={intervalHours} dailyTimes={dailyTimes} onModeChange={setSchedulerMode} onIntervalChange={setIntervalHours} onDailyTimesChange={setDailyTimes} />
+          <PublishModeFields mode={publishMode} onModeChange={setPublishMode} scheduledAt={scheduledAt} onScheduledAtChange={setScheduledAt} delayMinutes={delayMinutes} onDelayMinutesChange={setDelayMinutes} />
           <CloudinaryTransformFields enabled={cloudinaryTransformEnabled} transformation={cloudinaryTransform} mode={cloudinaryTransformMode} sampleUrl={mode === "single" ? mediaUrl : rotationItems[0]?.media_url} onEnabledChange={setCloudinaryTransformEnabled} onTransformationChange={setCloudinaryTransform} onModeChange={setCloudinaryTransformMode} />
           {schedulerMode === "every_x_hours" && <div className="rounded-md border p-4 space-y-3"><div className="font-medium text-sm">First run</div><div className="flex gap-2"><Button type="button" variant={startImmediately ? "default" : "outline"} onClick={() => setStartImmediately(true)}>Start immediately</Button><Button type="button" variant={!startImmediately ? "default" : "outline"} onClick={() => setStartImmediately(false)}>Specific UTC time</Button></div>{!startImmediately && <Input type="datetime-local" value={startAt} onChange={(event) => setStartAt(event.target.value)} />}</div>}
           <Button onClick={() => activateMut.mutate()} disabled={!channelId || (mode === "single" ? !mediaUrl : rotationItems.some((item) => !item.media_url)) || !intervalHours || (!startImmediately && !startAt) || activateMut.isPending}><Repeat2 className="h-4 w-4 mr-2" />Activate 1 Reel Formula</Button>

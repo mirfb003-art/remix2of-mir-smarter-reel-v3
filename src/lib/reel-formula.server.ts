@@ -2,6 +2,15 @@ import { withRetry, audit, makeIdempotencyKey } from "./reliability.server";
 import { makeBufferClient, resolveBufferCredential } from "./buffer.server";
 import { applyCloudinaryTransform, isCloudinaryDeliveryUrl } from "./cloudinary-transform";
 
+function resolveFormulaDueAt(schedule: { publish_mode: string; custom_schedule_offset_minutes: number | null; custom_schedule_at: string | null }) {
+  if (schedule.publish_mode !== "customScheduled") return null;
+  if (schedule.custom_schedule_at) return schedule.custom_schedule_at;
+  if (schedule.custom_schedule_offset_minutes != null) {
+    return new Date(Date.now() + schedule.custom_schedule_offset_minutes * 60_000).toISOString();
+  }
+  throw new Error("Custom schedule requires a date/time or relative offset");
+}
+
 type Sb = any;
 
 function nextRunAt(now: Date, intervalHours: number) {
@@ -121,7 +130,8 @@ export async function runReelFormulaSchedule(sb: Sb, scheduleId: string, slotKey
         channelId: channel.buffer_channel_id,
           text: rotationItem?.caption ?? schedule.caption ?? "",
           mediaUrl: publishMediaUrl,
-        mode: "shareNow",
+        mode: schedule.publish_mode,
+        dueAt: resolveFormulaDueAt(schedule),
         platform: schedule.platform,
         formula: formulaOptions,
       });

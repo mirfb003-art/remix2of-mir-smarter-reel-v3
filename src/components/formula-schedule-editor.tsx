@@ -9,17 +9,10 @@ import { CloudinaryUpload } from "@/components/cloudinary-upload";
 import { CloudinaryTransformFields } from "@/components/cloudinary-transform-fields";
 import { FormulaSchedulerFields, type FormulaSchedulerMode } from "@/components/formula-scheduler-fields";
 import { getBufferPlatformCapabilities } from "@/lib/buffer-platforms";
+import { PublishModeFields, isoToLocalInput, localInputToIso, type PublishMode } from "@/components/publish-mode-fields";
 
 type Schedule = any;
 type Channel = any;
-
-function toLocalInput(value: string | null | undefined) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
 
 export function FormulaScheduleEditor({ schedule, channels, onSave, onCancel }: { schedule: Schedule; channels: Channel[]; onSave: (value: any) => void; onCancel: () => void }) {
   const [channelId, setChannelId] = useState(schedule.channel_id);
@@ -38,7 +31,10 @@ export function FormulaScheduleEditor({ schedule, channels, onSave, onCancel }: 
   const [schedulerMode, setSchedulerMode] = useState<FormulaSchedulerMode>(schedule.scheduler_mode ?? "every_x_hours");
   const [intervalHours, setIntervalHours] = useState(Number(schedule.interval_hours ?? 24));
   const [dailyTimes, setDailyTimes] = useState<string[]>(Array.isArray(schedule.daily_times) && schedule.daily_times.length ? schedule.daily_times : ["09:00"]);
-  const [startAt, setStartAt] = useState(toLocalInput(schedule.start_at));
+  const [startAt, setStartAt] = useState(isoToLocalInput(schedule.start_at));
+  const [publishMode, setPublishMode] = useState<PublishMode>(schedule.publish_mode ?? "shareNow");
+  const [scheduledAt, setScheduledAt] = useState(isoToLocalInput(schedule.custom_schedule_at));
+  const [delayMinutes, setDelayMinutes] = useState<number | null>(schedule.custom_schedule_offset_minutes ?? null);
   const [transformEnabled, setTransformEnabled] = useState(Boolean(schedule.cloudinary_transform_enabled));
   const [transform, setTransform] = useState(schedule.cloudinary_transform ?? "");
   const [transformMode, setTransformMode] = useState<"replace" | "stack">(schedule.cloudinary_transform_mode === "stack" ? "stack" : "replace");
@@ -65,7 +61,8 @@ export function FormulaScheduleEditor({ schedule, channels, onSave, onCancel }: 
     {platform === "instagram" ? <label className="flex items-center gap-2 text-sm"><Checkbox checked={shareToFeed && postType === "reel"} disabled={postType !== "reel"} onCheckedChange={(checked) => setShareToFeed(Boolean(checked))} />Share to Feed</label> : <div className="flex flex-wrap gap-5"><label className="flex items-center gap-2 text-sm"><Checkbox checked={allowComments} disabled={capabilities.metadataSupport === "limited"} onCheckedChange={(checked) => setAllowComments(Boolean(checked))} />Allow Comments</label><label className="flex items-center gap-2 text-sm"><Checkbox checked={allowDuet} disabled={capabilities.metadataSupport === "limited"} onCheckedChange={(checked) => setAllowDuet(Boolean(checked))} />Allow Duet</label><label className="flex items-center gap-2 text-sm"><Checkbox checked={allowStitch} disabled={capabilities.metadataSupport === "limited"} onCheckedChange={(checked) => setAllowStitch(Boolean(checked))} />Allow Stitch</label></div>}
     <FormulaSchedulerFields mode={schedulerMode} intervalHours={intervalHours} dailyTimes={dailyTimes} onModeChange={setSchedulerMode} onIntervalChange={setIntervalHours} onDailyTimesChange={setDailyTimes} />
     {schedulerMode === "every_x_hours" && <div className="space-y-1"><Label>First run UTC time (optional)</Label><Input type="datetime-local" value={startAt} onChange={(event) => setStartAt(event.target.value)} /><p className="text-xs text-muted-foreground">Saving recomputes `next_run_at` from the new scheduler settings.</p></div>}
+    <PublishModeFields mode={publishMode} onModeChange={setPublishMode} scheduledAt={scheduledAt} onScheduledAtChange={setScheduledAt} delayMinutes={delayMinutes} onDelayMinutesChange={setDelayMinutes} />
     <CloudinaryTransformFields enabled={transformEnabled} transformation={transform} mode={transformMode} sampleUrl={schedule.mode === "multiple" ? schedule.media_url : mediaUrl} onEnabledChange={setTransformEnabled} onTransformationChange={setTransform} onModeChange={setTransformMode} />
-    <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onCancel}>Cancel</Button><Button type="button" onClick={() => onSave({ id: schedule.id, channel_id: channelId, platform, post_type: postType, media_url: schedule.mode === "multiple" ? schedule.media_url : mediaUrl, caption: schedule.mode === "multiple" ? schedule.caption : caption, thumbnail_timestamp: thumbnailTimestamp, privacy_level: platform === "tiktok" ? privacyLevel : null, share_to_feed: platform === "instagram" && postType === "reel" ? shareToFeed : false, allow_comments: allowComments, allow_duet: platform === "tiktok" ? allowDuet : false, allow_stitch: platform === "tiktok" ? allowStitch : false, interval_hours: intervalHours, scheduler_mode: schedulerMode, daily_times: dailyTimes, start_at: schedulerMode === "every_x_hours" ? (startAt ? new Date(startAt).toISOString() : null) : null, cloudinary_transform_enabled: transformEnabled, cloudinary_transform: transform, cloudinary_transform_mode: transformMode })}>Save formula</Button></div>
+    <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onCancel}>Cancel</Button><Button type="button" onClick={() => onSave({ id: schedule.id, channel_id: channelId, platform, post_type: postType, media_url: schedule.mode === "multiple" ? schedule.media_url : mediaUrl, caption: schedule.mode === "multiple" ? schedule.caption : caption, thumbnail_timestamp: thumbnailTimestamp, privacy_level: platform === "tiktok" ? privacyLevel : null, share_to_feed: platform === "instagram" && postType === "reel" ? shareToFeed : false, allow_comments: allowComments, allow_duet: platform === "tiktok" ? allowDuet : false, allow_stitch: platform === "tiktok" ? allowStitch : false, interval_hours: intervalHours, publish_mode: publishMode, custom_schedule_offset_minutes: publishMode === "customScheduled" ? delayMinutes : null, custom_schedule_at: publishMode === "customScheduled" && delayMinutes == null ? localInputToIso(scheduledAt) : null, scheduler_mode: schedulerMode, daily_times: dailyTimes, start_at: schedulerMode === "every_x_hours" ? (startAt ? new Date(startAt).toISOString() : null) : null, cloudinary_transform_enabled: transformEnabled, cloudinary_transform: transform, cloudinary_transform_mode: transformMode })}>Save formula</Button></div>
   </div>;
 }
