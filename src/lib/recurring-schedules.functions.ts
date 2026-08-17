@@ -23,11 +23,15 @@ const scheduleInput = z.object({
   allow_stitch: z.boolean().default(false),
   interval_hours: z.number().int().min(1).max(8760),
   scheduler_mode: z.enum(["every_x_hours", "daily_times", "manual"]).default("every_x_hours"),
-  daily_times: z.array(z.string().regex(/^([01]\\d|2[0-3]):[0-5]\\d$/)).default([]),
+  daily_times: z.preprocess((value) => Array.isArray(value) ? value.map((time) => String(time).trim()).filter(Boolean) : value, z.array(z.string().regex(/^([01]\\d|2[0-3]):[0-5]\\d$/)).default([])),
   start_at: z.string().datetime().nullable().optional(),
   cloudinary_transform_enabled: z.boolean().default(false),
   cloudinary_transform: z.string().max(1000).default(""),
   cloudinary_transform_mode: z.enum(["replace", "stack"]).default("replace"),
+}).superRefine((value, ctx) => {
+  if (value.scheduler_mode === "daily_times" && value.daily_times.length === 0) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["daily_times"], message: "At least one daily UTC time is required" });
+  }
 });
 
 function initialFormulaNextRun(mode: string, dailyTimes: string[], intervalHours: number, startAt: string | null | undefined) {

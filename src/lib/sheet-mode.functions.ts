@@ -35,11 +35,17 @@ const sheetSettingsSchema = z.object({
   retry_failed: z.boolean().default(true),
   scheduler_mode: z.enum(["every_x_hours", "daily_times", "manual"]).default("every_x_hours"),
   scheduler_interval_hours: z.number().int().min(0).max(8760).default(0),
-  daily_times: z.array(z.string().regex(/^([01]\\d|2[0-3]):[0-5]\\d$/)).default([]),
+  daily_times: z.preprocess((value) => Array.isArray(value) ? value.map((time) => String(time).trim()).filter(Boolean) : value, z.array(z.string().regex(/^([01]\\d|2[0-3]):[0-5]\\d$/)).default([])),
   cloudinary_transform_enabled: z.boolean().default(false),
   cloudinary_transform: z.string().max(1000).default(""),
   cloudinary_transform_mode: z.enum(["replace", "stack"]).default("replace"),
 });
+
+function validateSchedulerTimes(value: { scheduler_mode: string; daily_times: string[] }, ctx: z.RefinementCtx) {
+  if (value.scheduler_mode === "daily_times" && value.daily_times.length === 0) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["daily_times"], message: "At least one daily UTC time is required" });
+  }
+}
 
 const customizationSchema = z.record(z.string(), z.any()).default({});
 
@@ -206,7 +212,7 @@ export const listSheetModeWorkspace = createServerFn({ method: "GET" })
 
 export const createSheetModeSheet = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => sheetSettingsSchema.extend({ targets: z.array(targetInput).max(50) }).parse(d))
+  .inputValidator((d: unknown) => sheetSettingsSchema.extend({ targets: z.array(targetInput).max(50) }).superRefine(validateSchedulerTimes).parse(d))
   .handler(async ({ data, context }) => {
     const channels = await getOwnedChannels(context.supabase, context.userId, data.targets.map((target) => target.channel_id));
     const { data: sheet, error } = await context.supabase
@@ -263,7 +269,7 @@ export const createSheetModeSheet = createServerFn({ method: "POST" })
 
 export const updateSheetModeSheet = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => sheetSettingsSchema.extend({ id: sheetId }).parse(d))
+  .inputValidator((d: unknown) => sheetSettingsSchema.extend({ id: sheetId }).superRefine(validateSchedulerTimes).parse(d))
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase
       .from("sheet_mode_sheets")
