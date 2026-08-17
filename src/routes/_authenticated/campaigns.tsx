@@ -18,6 +18,7 @@ import { Play, Pause, Square, Trash2, Plus, CircleCheck, RotateCcw, RefreshCw, E
 import { MultiChannelCampaignPanel } from "@/components/multi-channel-campaign-panel";
 import { CloudinaryTransformFields } from "@/components/cloudinary-transform-fields";
 import { SchedulerStatsPanel } from "@/components/scheduler-stats-panel";
+import { SchedulerItemHistory } from "@/components/scheduler-item-history";
 import {
   createSampleCaption,
   deleteSampleCaption,
@@ -220,7 +221,7 @@ function CampaignsPage() {
 
       {activeCampaign && <MultiChannelCampaignPanel campaignId={activeCampaign.id} campaignMode={activeCampaign.channel_mode ?? "single"} />}
 
-      <SchedulerStatsPanel />
+      <SchedulerStatsPanel source="loop" />
 
       {activeCampaign && <Card><CardHeader><CardTitle>Cloudinary transformation</CardTitle><CardDescription>Applied only to the temporary media URL sent to Buffer. The campaign queue URL is never rewritten.</CardDescription></CardHeader><CardContent><CloudinaryTransformFields enabled={Boolean(activeCampaign.cloudinary_transform_enabled)} transformation={activeCampaign.cloudinary_transform ?? ""} mode={activeCampaign.cloudinary_transform_mode === "stack" ? "stack" : "replace"} onEnabledChange={(cloudinary_transform_enabled) => cloudinaryMut.mutate({ cloudinary_transform_enabled, cloudinary_transform: activeCampaign.cloudinary_transform ?? "", cloudinary_transform_mode: activeCampaign.cloudinary_transform_mode === "stack" ? "stack" : "replace" })} onTransformationChange={(cloudinary_transform) => cloudinaryMut.mutate({ cloudinary_transform_enabled: Boolean(activeCampaign.cloudinary_transform_enabled), cloudinary_transform, cloudinary_transform_mode: activeCampaign.cloudinary_transform_mode === "stack" ? "stack" : "replace" })} onModeChange={(cloudinary_transform_mode) => cloudinaryMut.mutate({ cloudinary_transform_enabled: Boolean(activeCampaign.cloudinary_transform_enabled), cloudinary_transform: activeCampaign.cloudinary_transform ?? "", cloudinary_transform_mode })} /></CardContent></Card>}
 
@@ -330,6 +331,7 @@ function CampaignsPage() {
                         </>
                       )}
                     </div>
+                    <SchedulerItemHistory source="loop" itemId={c.id} />
                     <Badge variant={c.status === "active" ? "default" : c.status === "paused" ? "secondary" : "destructive"} className="capitalize">
                       {c.status}
                     </Badge>

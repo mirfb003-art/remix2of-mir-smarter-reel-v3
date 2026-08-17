@@ -46,3 +46,42 @@ export const getSchedulerStats = createServerFn({ method: "GET" })
     }
     return { days, since, metrics };
   });
+
+const schedulerItemHistoryInput = z.object({
+  source: z.enum(sources),
+  item_id: z.string().uuid(),
+});
+
+export const listSchedulerItemHistory = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => schedulerItemHistoryInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const ownerTable = data.source === "loop" ? "campaigns" : data.source === "formula" ? "recurring_schedules" : "sheet_mode_sheets";
+    const { data: ownedItem, error: ownerError } = await context.supabase
+      .from(ownerTable)
+      .select("id")
+      .eq("id", data.item_id)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (ownerError) throw new Error(ownerError.message);
+    if (!ownedItem) throw new Error("Scheduler item not found");
+
+    let query = context.supabase.from("runs")
+      .select("id,status,error,started_at,finished_at,duration_ms,strategy_used,published_posts(buffer_post_id,permalink,posted_at,buffer_status,due_at,verified_at,platform,text_content)", { count: "exact" })
+      .eq("user_id", context.userId)
+      .order("started_at", { ascending: false })
+      .limit(8);
+    if (data.source === "loop") {
+      query = query.ilike("strategy_used", "objective=%").eq("campaign_id", data.item_id);
+    } else {
+      query = query.eq("strategy_used", data.source === "formula" ? "1_reel_formula" : "sheet_mode").contains("step_state", data.source === "formula" ? { recurring_schedule_id: data.item_id } : { sheet_id: data.item_id });
+    }
+    const { data: rows, error, count } = await query;
+    if (error) throw new Error(error.message);
+    const history = rows ?? [];
+    return {
+      total_runs: count ?? history.length,
+      last_run_at: history[0]?.started_at ?? null,
+      recent_runs: history.slice(0, 8).map((row: any) => ({ id: row.id, status: row.status, started_at: row.started_at, finished_at: row.finished_at, duration_ms: row.duration_ms, error: row.error, posts_published: row.published_posts?.length ?? 0 })),
+    };
+  });

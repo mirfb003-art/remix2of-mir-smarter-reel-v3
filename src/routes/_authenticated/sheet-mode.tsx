@@ -23,6 +23,7 @@ import {
 import { CloudinaryUpload } from "@/components/cloudinary-upload";
 import { ContentGalleryPanel } from "@/components/content-gallery-panel";
 import { SchedulerStatsPanel } from "@/components/scheduler-stats-panel";
+import { SchedulerItemHistory } from "@/components/scheduler-item-history";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -283,7 +284,7 @@ function SheetModePage() {
           onSettingsSaved={(values) => updateSettings({ data: { id: sheetId, ...values } })}
         />
         <ContentGalleryPanel />
-        <SchedulerStatsPanel />
+        <SchedulerStatsPanel source="sheet_mode" />
       </div>
     );
   const action = (p: Promise<unknown>, text?: string) =>
@@ -488,6 +489,9 @@ function SheetModePage() {
                         {t.channel_label}
                       </Badge>
                     ))}
+                  </div>
+                  <div className="mt-3">
+                    <SchedulerItemHistory source="sheet_mode" itemId={s.id} />
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
