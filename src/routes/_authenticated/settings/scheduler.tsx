@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { useState } from "react";
 import { Trash2, Play, Pause } from "lucide-react";
 import { PublishModeFields, localInputToIso, type PublishMode } from "@/components/publish-mode-fields";
+import { ChannelOptionLabel, ChannelSelect } from "@/components/channel-picker";
 
 
 export const Route = createFileRoute("/_authenticated/settings/scheduler")({ component: SchedulerSettings });
@@ -69,10 +70,7 @@ function SchedulerSettings() {
         <CardHeader><CardTitle>New schedule</CardTitle><CardDescription>Per channel. UTC.</CardDescription></CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-4">
           <div className="space-y-1 md:col-span-2"><Label>Channel</Label>
-            <Select value={channelId} onValueChange={setChannelId}>
-              <SelectTrigger><SelectValue placeholder="Pick a channel"/></SelectTrigger>
-              <SelectContent>{(chans ?? []).map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
-            </Select>
+            <ChannelSelect channels={chans ?? []} value={channelId} onValueChange={setChannelId} placeholder="Pick a channel" includeMissing={false} />
           </div>
           <div className="space-y-1"><Label>Mode</Label>
             <Select value={mode} onValueChange={(v) => setMode(v as any)}>
@@ -111,7 +109,7 @@ function SchedulerSettings() {
                 return (
                   <li key={s.id} className="py-3 flex items-center gap-3 text-sm">
                     <div className="flex-1">
-                      <div className="font-medium">{chan?.name ?? s.channel_id}</div>
+                      {chan ? <ChannelOptionLabel channel={chan} /> : <div className="font-medium">{s.channel_id}</div>}
                       <div className="text-xs text-muted-foreground">
                         {s.mode === "interval" ? `Every ${s.interval_hours}h` : s.mode === "daily_times" ? `At ${(s.daily_times ?? []).join(", ")} UTC` : "Manual"}
                         {s.next_run_at ? ` · next ${new Date(s.next_run_at).toLocaleString()}` : ""}

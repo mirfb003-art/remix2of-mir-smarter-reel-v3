@@ -19,6 +19,7 @@ import { RecurringScheduleItemsPanel } from "@/components/recurring-schedule-ite
 import { FormulaScheduleEditor } from "@/components/formula-schedule-editor";
 import { ContentGalleryPanel } from "@/components/content-gallery-panel";
 import { SchedulerStatsPanel } from "@/components/scheduler-stats-panel";
+import { ChannelSelect } from "@/components/channel-picker";
 import { SchedulerItemHistory } from "@/components/scheduler-item-history";
 import { useCampaignScope } from "@/components/campaign-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -173,7 +174,7 @@ function ReelFormulaPage() {
           <div className="space-y-1"><Label>Formula mode</Label><Select value={mode} onValueChange={(value) => setMode(value as "single" | "multiple")}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="single">Single — one fixed media asset</SelectItem><SelectItem value="multiple">Multiple — rotate an ordered item list</SelectItem></SelectContent></Select></div>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1"><Label>Campaign (optional)</Label><Select value={selectedCampaignId} onValueChange={(value) => { setSelectedCampaignId(value); setChannelId(""); }}><SelectTrigger><SelectValue placeholder="Shared workspace" /></SelectTrigger><SelectContent><SelectItem value="none">Shared workspace</SelectItem>{(campaigns ?? []).map((campaign: any) => <SelectItem key={campaign.id} value={campaign.id}>{campaign.name}</SelectItem>)}</SelectContent></Select></div>
-            <div className="space-y-1"><Label>Buffer Connection & Channel</Label><Select value={channelId} onValueChange={setChannelId}><SelectTrigger><SelectValue placeholder="Select a connected channel" /></SelectTrigger><SelectContent>{platformChannels.map((channel: any) => <SelectItem key={channel.id} value={channel.id}>{channel.name} · {channel.platform}</SelectItem>)}</SelectContent></Select></div>
+            <div className="space-y-1"><Label>Buffer Connection & Channel</Label><ChannelSelect channels={platformChannels} value={channelId} onValueChange={setChannelId} placeholder="Select a connected channel" includeMissing={false} /></div>
           </div>
 
           {selectedChannel ? (

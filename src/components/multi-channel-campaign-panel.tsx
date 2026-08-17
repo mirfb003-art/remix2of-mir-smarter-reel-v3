@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
+import { ChannelOptionLabel, ChannelSearchField, filterChannelOptions } from "@/components/channel-picker";
 
 type Props = { campaignId: string; campaignMode: string };
 type Draft = { channel_id: string; analysis_scope: string; analysis_n_value: number; analysis_custom_query: string | null; is_active: boolean; last_refreshed_at: string | null };
@@ -25,6 +26,7 @@ export function MultiChannelCampaignPanel({ campaignId, campaignMode }: Props) {
   const [intervalHours, setIntervalHours] = useState(24);
   const [startImmediately, setStartImmediately] = useState(true);
   const [startAt, setStartAt] = useState("");
+  const [channelSearch, setChannelSearch] = useState("");
 
   useEffect(() => {
     if (!data) return;
@@ -68,12 +70,13 @@ export function MultiChannelCampaignPanel({ campaignId, campaignMode }: Props) {
       <CardHeader><CardTitle>Multi-channel campaign</CardTitle><CardDescription>One shared Cloudinary queue item is published to every selected channel, with separate analytics and lookback settings per channel.</CardDescription></CardHeader>
       <CardContent className="space-y-5">
         <div className="space-y-2"><Label>Connected channels and Buffer accounts</Label>
+          <ChannelSearchField value={channelSearch} onChange={setChannelSearch} />
           <div className="grid gap-2 md:grid-cols-2">
-            {(data.channels ?? []).map((channel: any) => {
+            {filterChannelOptions(data.channels ?? [], channelSearch).map((channel: any) => {
               const checked = selected.has(channel.id);
               const target = drafts.find((d) => d.channel_id === channel.id);
               return <div key={channel.id} className="rounded-md border p-3 space-y-3">
-                <div className="flex items-start gap-2"><Checkbox checked={checked} onCheckedChange={() => toggleChannel(channel.id)} /><div className="min-w-0"><div className="font-medium text-sm">{channel.name}</div><div className="text-xs text-muted-foreground">{channel.platform} · {channel.buffer_credentials?.label ?? "Buffer account"}</div></div></div>
+                <div className="flex items-start gap-2"><Checkbox checked={checked} onCheckedChange={() => toggleChannel(channel.id)} /><div className="min-w-0"><ChannelOptionLabel channel={channel} /><div className="text-[10px] text-muted-foreground">{channel.buffer_credentials?.label ?? "Buffer account"}</div></div></div>
                 {checked && target && <div className="grid gap-2 pl-6 md:grid-cols-2"><div className="space-y-1"><Label className="text-xs">Previous posts per channel</Label><Input type="number" min={1} max={500} value={target.analysis_n_value} onChange={(e) => updateDraft(channel.id, { analysis_n_value: Number(e.target.value), analysis_scope: "last_n" })} /></div><div className="text-[11px] text-muted-foreground md:pt-6">Last refreshed: {target.last_refreshed_at ? new Date(target.last_refreshed_at).toLocaleString() : "Not yet"}</div></div>}
               </div>;
             })}

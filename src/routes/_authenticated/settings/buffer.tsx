@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listBufferCreds, saveBufferCred, deleteBufferCred, syncBufferChannels } from "@/lib/buffer.functions";
 import { listChannels, deleteChannel } from "@/lib/channels.functions";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ChannelOptionLabel, ChannelSelect } from "@/components/channel-picker";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -155,7 +155,7 @@ function BufferSettings() {
                 return (
                   <li key={c.id} className={`py-2 flex flex-wrap items-center gap-2 text-sm ${missing ? "text-destructive" : ""}`}>
                     <div className="flex-1 min-w-[160px]">
-                      <div className="font-medium">{c.name}</div>
+                      <ChannelOptionLabel channel={c} />
                       <div className={`text-xs ${missing ? "text-destructive/80" : "text-muted-foreground"}`}>
                         {c.platform} · {c.buffer_channel_id}
                         <span className="block">Supports: {getBufferPlatformCapabilities(c.platform).supportedPostTypes.join(", ")} · {getBufferPlatformCapabilities(c.platform).metadataSupport} metadata</span>
@@ -164,14 +164,7 @@ function BufferSettings() {
                     {missing ? (
                       <>
                         <Badge variant="destructive">not in Buffer</Badge>
-                        <Select value={moveTargets[c.id] ?? ""} onValueChange={(v) => setMoveTargets((m) => ({ ...m, [c.id]: v }))}>
-                          <SelectTrigger className="w-48 h-8 text-xs"><SelectValue placeholder="Move queue to…" /></SelectTrigger>
-                          <SelectContent>
-                            {(chans ?? []).filter((o) => o.id !== c.id && !(o as any).missing_since).map((o) => (
-                              <SelectItem key={o.id} value={o.id}>{o.name} · {o.platform}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <ChannelSelect channels={(chans ?? []).filter((o) => o.id !== c.id)} value={moveTargets[c.id] ?? ""} onValueChange={(v) => setMoveTargets((m) => ({ ...m, [c.id]: v }))} placeholder="Move queue to…" className="w-48 h-8 text-xs" includeMissing={false} />
                         <Button size="sm" variant="destructive" disabled={delChanMut.isPending}
                           onClick={() => delChanMut.mutate({ id: c.id, move_queue_to: moveTargets[c.id] || null })}>
                           <Trash2 className="h-4 w-4 mr-1" />Delete

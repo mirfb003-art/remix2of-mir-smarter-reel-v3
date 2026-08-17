@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Play, Sparkles, TrendingUp, Clock, ListVideo, CheckCircle2, XCircle, Brain } from "lucide-react";
 import { toast } from "sonner";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ChannelSelect } from "@/components/channel-picker";
 import { useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({ component: DashboardPage });
@@ -52,14 +52,7 @@ function DashboardPage() {
           <p className="text-sm text-muted-foreground">Your adaptive publishing loop at a glance.</p>
         </div>
         <div className="flex gap-2 items-center">
-          <Select value={channelId} onValueChange={setChannelId}>
-            <SelectTrigger className="w-56"><SelectValue placeholder="Select a channel" /></SelectTrigger>
-            <SelectContent>
-              {(chans ?? []).map((c) => (
-                <SelectItem key={c.id} value={c.id}>{c.name} · {c.platform}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <ChannelSelect channels={chans ?? []} value={channelId} onValueChange={setChannelId} placeholder="Select a channel" className="w-56" />
           <Button disabled={!channelId || run.isPending} onClick={() => run.mutate(channelId)}>
             <Play className="h-4 w-4 mr-2" />
             {run.isPending ? "Running…" : "Manual run"}

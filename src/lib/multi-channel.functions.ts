@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { addChannelUsageLabels } from "./channel-usage.server";
 
 const scope = z.enum(["last_n", "top_n", "highest_engagement", "highest_views", "highest_saves", "all", "custom"]);
 const targetSchema = z.object({
@@ -18,7 +19,7 @@ export const getMultiChannelConfig = createServerFn({ method: "POST" })
     const sb = context.supabase;
     const [{ data: campaign, error: campaignError }, { data: channels, error: channelError }, { data: targets, error: targetError }, { data: schedule, error: scheduleError }] = await Promise.all([
       sb.from("campaigns").select("id,channel_mode").eq("id", data.campaign_id).eq("user_id", context.userId).single(),
-      sb.from("channels").select("id,name,platform,buffer_channel_id,credential_id,active,missing_since,buffer_credentials(id,label)").eq("user_id", context.userId).is("missing_since", null).order("created_at", { ascending: false }),
+      sb.from("channels").select("id,name,platform,buffer_channel_id,credential_id,campaign_id,active,missing_since,buffer_credentials(id,label)").eq("user_id", context.userId).is("missing_since", null).order("created_at", { ascending: false }),
       sb.from("campaign_channel_targets").select("*").eq("user_id", context.userId).eq("campaign_id", data.campaign_id).order("created_at", { ascending: true }),
       sb.from("multi_channel_schedules").select("*").eq("user_id", context.userId).eq("campaign_id", data.campaign_id).maybeSingle(),
     ]);
@@ -26,7 +27,7 @@ export const getMultiChannelConfig = createServerFn({ method: "POST" })
     if (channelError) throw new Error(channelError.message);
     if (targetError) throw new Error(targetError.message);
     if (scheduleError) throw new Error(scheduleError.message);
-    return { campaign, channels: channels ?? [], targets: targets ?? [], schedule: schedule ?? null };
+    return { campaign, channels: await addChannelUsageLabels(sb, context.userId, channels ?? []), targets: targets ?? [], schedule: schedule ?? null };
   });
 
 export const saveMultiChannelConfig = createServerFn({ method: "POST" })

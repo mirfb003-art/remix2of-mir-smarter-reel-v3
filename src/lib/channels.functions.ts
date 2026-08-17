@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { addChannelUsageLabels } from "./channel-usage.server";
 
 export const listChannels = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -14,7 +15,7 @@ export const listChannels = createServerFn({ method: "POST" })
     if (data?.campaign_id) q = q.or(`campaign_id.eq.${data.campaign_id},campaign_id.is.null`);
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
-    return rows ?? [];
+    return addChannelUsageLabels(context.supabase, context.userId, rows ?? []);
   });
 
 const saveSchema = z.object({

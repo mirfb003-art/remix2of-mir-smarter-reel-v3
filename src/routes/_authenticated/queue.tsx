@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Trash2, RotateCcw, Plus, ListVideo, ArrowUp, ArrowDown, AlertTriangle, RefreshCw, Upload, ArrowRightLeft } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ChannelSelect } from "@/components/channel-picker";
 
 export const Route = createFileRoute("/_authenticated/queue")({ component: QueuePage });
 
@@ -114,14 +114,7 @@ function QueuePage() {
         <CardContent className="space-y-3">
           <Textarea rows={6} placeholder="https://res.cloudinary.com/.../video.mp4" value={text} onChange={(e) => setText(e.target.value)} className="font-mono text-xs" />
           <div className="flex gap-2 items-center">
-            <Select value={channelId} onValueChange={setChannelId}>
-              <SelectTrigger className="w-64"><SelectValue placeholder="Default channel (optional)" /></SelectTrigger>
-              <SelectContent>
-                {(channels ?? []).map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.name} · {c.platform}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ChannelSelect channels={channels ?? []} value={channelId} onValueChange={setChannelId} placeholder="Default channel (optional)" className="w-64" />
             <Button onClick={submit} disabled={addMut.isPending}>Add to queue</Button>
             <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={addMut.isPending}>
               <Upload className="h-4 w-4 mr-1"/>Import CSV/TXT
@@ -139,22 +132,8 @@ function QueuePage() {
           <CardDescription>Reassign pending/failed items — useful when a Buffer channel was reconnected and got a new ID.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2 items-center">
-          <Select value={bulkFrom} onValueChange={setBulkFrom}>
-            <SelectTrigger className="w-56"><SelectValue placeholder="From channel" /></SelectTrigger>
-            <SelectContent>
-              {(channels ?? []).map((c) => (
-                <SelectItem key={c.id} value={c.id}>{c.name} · {c.platform}{(c as any).missing_since ? " (missing)" : ""}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={bulkTo} onValueChange={setBulkTo}>
-            <SelectTrigger className="w-56"><SelectValue placeholder="To channel" /></SelectTrigger>
-            <SelectContent>
-              {(channels ?? []).filter((c) => !(c as any).missing_since).map((c) => (
-                <SelectItem key={c.id} value={c.id}>{c.name} · {c.platform}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <ChannelSelect channels={channels ?? []} value={bulkFrom} onValueChange={setBulkFrom} placeholder="From channel" className="w-56" />
+          <ChannelSelect channels={channels ?? []} value={bulkTo} onValueChange={setBulkTo} placeholder="To channel" className="w-56" includeMissing={false} />
           <Button disabled={!bulkFrom || !bulkTo || moveChanMut.isPending}
             onClick={() => moveChanMut.mutate({ from_channel_id: bulkFrom, to_channel_id: bulkTo })}>
             Move all
@@ -176,14 +155,7 @@ function QueuePage() {
                   <span className="text-xs text-muted-foreground w-8">#{it.position}</span>
                   <Badge variant="outline" className="capitalize">{it.status}</Badge>
                   <span className="font-mono text-xs truncate flex-1 min-w-[120px] text-muted-foreground">{it.cloudinary_url}</span>
-                  <Select value={it.channel_id ?? ""} onValueChange={(v) => moveChanMut.mutate({ ids: [it.id], to_channel_id: v })}>
-                    <SelectTrigger className="w-44 h-8 text-xs"><SelectValue placeholder="No channel" /></SelectTrigger>
-                    <SelectContent>
-                      {(channels ?? []).map((c) => (
-                        <SelectItem key={c.id} value={c.id}>{c.name} · {c.platform}{(c as any).missing_since ? " (missing)" : ""}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <ChannelSelect channels={channels ?? []} value={it.channel_id ?? ""} onValueChange={(v) => moveChanMut.mutate({ ids: [it.id], to_channel_id: v })} placeholder="No channel" className="w-44 h-8 text-xs" />
                   {it.error && <span className="text-xs text-destructive truncate max-w-[180px]">{it.error}</span>}
                   {it.status === "pending" && (
                     <>

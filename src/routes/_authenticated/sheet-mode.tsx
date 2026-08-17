@@ -24,6 +24,7 @@ import { CloudinaryUpload } from "@/components/cloudinary-upload";
 import { ContentGalleryPanel } from "@/components/content-gallery-panel";
 import { SchedulerStatsPanel } from "@/components/scheduler-stats-panel";
 import { SchedulerItemHistory } from "@/components/scheduler-item-history";
+import { ChannelOptionLabel, ChannelSearchField, filterChannelOptions } from "@/components/channel-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -238,6 +239,7 @@ function SheetModePage() {
   const [sheetId, setSheetId] = useState<string | null>(null);
   const [settings, setSettings] = useState(DEFAULT);
   const [channelIds, setChannelIds] = useState<string[]>([]);
+  const [channelSearch, setChannelSearch] = useState("");
   const [creating, setCreating] = useState(false);
   const workspace = useQuery({ queryKey: ["sheet-mode-workspace"], queryFn: () => list() });
   const detail = useQuery({
@@ -265,6 +267,7 @@ function SheetModePage() {
       toast.success("Sheet created");
       setSettings(DEFAULT);
       setChannelIds([]);
+      setChannelSearch("");
       setCreating(false);
       setSheetId(r.id);
       refresh();
@@ -428,9 +431,10 @@ function SheetModePage() {
             </div>
             <div className="md:col-span-2 space-y-2">
               <Label>Initial Buffer channels</Label>
+              <ChannelSearchField value={channelSearch} onChange={setChannelSearch} />
               <div className="flex flex-wrap gap-2">
                 {channels.length ? (
-                  channels.map((c: any) => (
+                  filterChannelOptions(channels as any[], channelSearch).map((c: any) => (
                     <Button
                       key={c.id}
                       type="button"
@@ -443,7 +447,7 @@ function SheetModePage() {
                       }
                     >
                       {channelIds.includes(c.id) && <Check className="h-3 w-3 mr-1" />}
-                      {c.name ?? c.platform} · {c.platform}
+                      <ChannelOptionLabel channel={c} />
                     </Button>
                   ))
                 ) : (
@@ -562,6 +566,7 @@ function SheetGrid({
     fillUrls = useServerFn(fillSheetModeUrls);
   const fileRef = useRef<HTMLInputElement>(null);
   const [newChannel, setNewChannel] = useState("");
+  const [channelSearch, setChannelSearch] = useState("");
   const [backfillNewChannel, setBackfillNewChannel] = useState(false);
   const [preview, setPreview] = useState<{
     rows: ImportRow[];
@@ -1012,34 +1017,36 @@ function SheetGrid({
             />
             <Label htmlFor="sheet-mode-backfill">Backfill existing rows</Label>
           </div>
-          <Select
-            value={newChannel}
-            onValueChange={(v) => {
-              setNewChannel("");
-              run(
-                addTarget({
-                  data: {
-                    sheet_id: sheet.id,
-                    targets: [{ channel_id: v, backfill_applied: backfillNewChannel }],
-                  },
-                }),
-                "Channel added",
-              );
-            }}
-          >
-            <SelectTrigger className="w-56">
-              <SelectValue placeholder="Add channel" />
-            </SelectTrigger>
-            <SelectContent>
-              {channels
-                .filter((c: any) => !active.some((t) => t.channel_id === c.id))
-                .map((c: any) => (
+          <div className="w-56">
+            <ChannelSearchField value={channelSearch} onChange={setChannelSearch} />
+            <Select
+              value={newChannel}
+              onValueChange={(v) => {
+                setNewChannel("");
+                setChannelSearch("");
+                run(
+                  addTarget({
+                    data: {
+                      sheet_id: sheet.id,
+                      targets: [{ channel_id: v, backfill_applied: backfillNewChannel }],
+                    },
+                  }),
+                  "Channel added",
+                );
+              }}
+            >
+              <SelectTrigger className="mt-1 w-full">
+                <SelectValue placeholder="Add channel" />
+              </SelectTrigger>
+              <SelectContent>
+                {filterChannelOptions(channels.filter((c: any) => !active.some((t) => t.channel_id === c.id)), channelSearch).map((c: any) => (
                   <SelectItem key={c.id} value={c.id}>
-                    {c.name ?? c.platform} · {c.platform}
+                    <ChannelOptionLabel channel={c} />
                   </SelectItem>
                 ))}
-            </SelectContent>
-          </Select>
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
     </div>

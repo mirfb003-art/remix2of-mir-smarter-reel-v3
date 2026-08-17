@@ -4,6 +4,7 @@ import type { Json } from "@/integrations/supabase/types";
 import { normalizeBufferPlatform } from "./buffer-platforms";
 import { z } from "zod";
 import { nextSheetRunAt, runSheetModeCycle } from "./sheet-mode.server";
+import { addChannelUsageLabels } from "./channel-usage.server";
 
 const sheetId = z.string().uuid();
 const channelId = z.string().uuid();
@@ -178,7 +179,7 @@ export const listSheetModeWorkspace = createServerFn({ method: "GET" })
         .order("created_at", { ascending: false }),
       context.supabase
         .from("channels")
-        .select("id,name,platform,credential_id,active,missing_since,buffer_credentials(id,label)")
+        .select("id,name,platform,credential_id,campaign_id,active,missing_since,buffer_credentials(id,label)")
         .eq("user_id", context.userId)
         .eq("active", true)
         .is("missing_since", null)
@@ -206,7 +207,7 @@ export const listSheetModeWorkspace = createServerFn({ method: "GET" })
 
     return {
       sheets: sheets.map((sheet) => ({ ...sheet, channel_targets: targetsBySheet.get(sheet.id) ?? [] })),
-      channels: channelsResult.data ?? [],
+      channels: await addChannelUsageLabels(context.supabase, context.userId, channelsResult.data ?? []),
     };
   });
 

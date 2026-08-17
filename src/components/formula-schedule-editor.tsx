@@ -10,6 +10,7 @@ import { CloudinaryTransformFields } from "@/components/cloudinary-transform-fie
 import { FormulaSchedulerFields, type FormulaSchedulerMode } from "@/components/formula-scheduler-fields";
 import { getBufferPlatformCapabilities } from "@/lib/buffer-platforms";
 import { PublishModeFields, isoToLocalInput, localInputToIso, type PublishMode } from "@/components/publish-mode-fields";
+import { ChannelSelect } from "@/components/channel-picker";
 
 type Schedule = any;
 type Channel = any;
@@ -47,7 +48,7 @@ export function FormulaScheduleEditor({ schedule, channels, onSave, onCancel }: 
   return <div className="rounded-md border bg-muted/20 p-4 space-y-4" data-testid={`formula-schedule-editor-${schedule.id}`}>
     <div className="font-medium">Edit formula settings</div>
     <div className="grid gap-4 md:grid-cols-2">
-      <div className="space-y-1"><Label>Buffer Connection & Channel</Label><Select value={channelId} onValueChange={setChannelId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{channels.filter((channel) => channel.active && !channel.missing_since).map((channel) => <SelectItem key={channel.id} value={channel.id}>{channel.name} · {channel.platform}</SelectItem>)}</SelectContent></Select></div>
+      <div className="space-y-1"><Label>Buffer Connection & Channel</Label><ChannelSelect channels={channels.filter((channel) => channel.active && !channel.missing_since)} value={channelId} onValueChange={setChannelId} placeholder="Select a connected channel" includeMissing={false} /></div>
       <div className="space-y-1"><Label>Post type</Label><Select value={postType} onValueChange={setPostType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{platform === "instagram" ? <><SelectItem value="reel">Reel</SelectItem><SelectItem value="story">Story</SelectItem></> : <><SelectItem value="video">Video</SelectItem><SelectItem value="story">Story</SelectItem></>}</SelectContent></Select></div>
     </div>
     {schedule.mode === "multiple" ? <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">This is a Multiple/rotation formula. Rotation media, captions, order, and `last_published_item_id` are managed separately below and are not changed by this general settings edit.</div> : <>
