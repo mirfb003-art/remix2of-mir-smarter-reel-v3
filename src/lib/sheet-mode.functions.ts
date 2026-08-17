@@ -36,15 +36,22 @@ const sheetSettingsSchema = z.object({
   retry_failed: z.boolean().default(true),
   scheduler_mode: z.enum(["every_x_hours", "daily_times", "manual"]).default("every_x_hours"),
   scheduler_interval_hours: z.number().int().min(0).max(8760).default(0),
-  daily_times: z.preprocess((value) => Array.isArray(value) ? value.map((time) => String(time).trim()).filter(Boolean) : value, z.array(z.string().regex(/^([01]\\d|2[0-3]):[0-5]\\d$/)).default([])),
+  daily_times: z.preprocess((value) => Array.isArray(value) ? value.map((time) => String(time).trim()).filter(Boolean) : value, z.array(z.string()).default([])),
   cloudinary_transform_enabled: z.boolean().default(false),
   cloudinary_transform: z.string().max(1000).default(""),
   cloudinary_transform_mode: z.enum(["replace", "stack"]).default("replace"),
 });
 
 function validateSchedulerTimes(value: { scheduler_mode: string; daily_times: string[] }, ctx: z.RefinementCtx) {
-  if (value.scheduler_mode === "daily_times" && value.daily_times.length === 0) {
+  if (value.scheduler_mode !== "daily_times") return;
+  if (value.daily_times.length === 0) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["daily_times"], message: "At least one daily UTC time is required" });
+    return;
+  }
+  for (const [index, time] of value.daily_times.entries()) {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["daily_times", index], message: "Invalid daily UTC time" });
+    }
   }
 }
 

@@ -32,14 +32,22 @@ const scheduleInput = z.object({
   custom_schedule_offset_minutes: z.number().int().min(0).max(60 * 24 * 30).nullable().default(null),
   custom_schedule_at: z.string().datetime().nullable().default(null),
   scheduler_mode: z.enum(["every_x_hours", "daily_times", "manual"]).default("every_x_hours"),
-  daily_times: z.preprocess((value) => Array.isArray(value) ? value.map((time) => String(time).trim()).filter(Boolean) : value, z.array(z.string().regex(/^([01]\\d|2[0-3]):[0-5]\\d$/)).default([])),
+  daily_times: z.preprocess((value) => Array.isArray(value) ? value.map((time) => String(time).trim()).filter(Boolean) : value, z.array(z.string()).default([])),
   start_at: z.string().datetime().nullable().optional(),
   cloudinary_transform_enabled: z.boolean().default(false),
   cloudinary_transform: z.string().max(1000).default(""),
   cloudinary_transform_mode: z.enum(["replace", "stack"]).default("replace"),
 }).superRefine((value, ctx) => {
-  if (value.scheduler_mode === "daily_times" && value.daily_times.length === 0) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["daily_times"], message: "At least one daily UTC time is required" });
+  if (value.scheduler_mode === "daily_times") {
+    if (value.daily_times.length === 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["daily_times"], message: "At least one daily UTC time is required" });
+    } else {
+      for (const [index, time] of value.daily_times.entries()) {
+        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["daily_times", index], message: "Invalid daily UTC time" });
+        }
+      }
+    }
   }
   validatePublishMode(value, ctx);
 });
@@ -154,14 +162,22 @@ const formulaEditSchema = z.object({
   custom_schedule_offset_minutes: z.number().int().min(0).max(60 * 24 * 30).nullable(),
   custom_schedule_at: z.string().datetime().nullable(),
   scheduler_mode: z.enum(["every_x_hours", "daily_times", "manual"]),
-  daily_times: z.preprocess((value) => Array.isArray(value) ? value.map((time) => String(time).trim()).filter(Boolean) : value, z.array(z.string().regex(/^([01]\\d|2[0-3]):[0-5]\\d$/))),
+  daily_times: z.preprocess((value) => Array.isArray(value) ? value.map((time) => String(time).trim()).filter(Boolean) : value, z.array(z.string())),
   start_at: z.string().datetime().nullable(),
   cloudinary_transform_enabled: z.boolean(),
   cloudinary_transform: z.string().max(1000),
   cloudinary_transform_mode: z.enum(["replace", "stack"]),
 }).superRefine((value, ctx) => {
-  if (value.scheduler_mode === "daily_times" && value.daily_times.length === 0) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["daily_times"], message: "At least one daily UTC time is required" });
+  if (value.scheduler_mode === "daily_times") {
+    if (value.daily_times.length === 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["daily_times"], message: "At least one daily UTC time is required" });
+    } else {
+      for (const [index, time] of value.daily_times.entries()) {
+        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["daily_times", index], message: "Invalid daily UTC time" });
+        }
+      }
+    }
   }
   validatePublishMode(value, ctx);
 });
