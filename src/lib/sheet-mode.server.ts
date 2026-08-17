@@ -533,6 +533,7 @@ export async function runDueSheetModeSheets(sb: Sb) {
   const slotKey = bucketKey(now);
   for (const sheet of sheets ?? []) {
     const nextRunAt = nextSheetRunAt(sheet as any, now);
+    if (!nextRunAt) continue;
     const { data: claimed, error: claimError } = await supabaseAdmin.rpc("claim_sheet_mode_schedule", {
       _sheet_id: sheet.id,
       _now: now.toISOString(),
