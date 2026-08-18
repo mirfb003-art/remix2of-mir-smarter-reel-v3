@@ -1,6 +1,7 @@
 import { withRetry, audit, makeIdempotencyKey } from "./reliability.server";
 import { makeBufferClient, resolveBufferCredential } from "./buffer.server";
 import { applyCloudinaryTransform, isCloudinaryDeliveryUrl } from "./cloudinary-transform";
+import { formulaStoryFirstSyncDueAt } from "./formula-insights.server";
 
 function resolveFormulaDueAt(schedule: { publish_mode: string; custom_schedule_offset_minutes: number | null; custom_schedule_at: string | null }) {
   if (schedule.publish_mode !== "customScheduled") return null;
@@ -157,6 +158,23 @@ export async function runReelFormulaSchedule(sb: Sb, scheduleId: string, slotKey
       verified_at: published.verified ? new Date().toISOString() : null,
     });
     if (postError) throw new Error(`formula post history: ${postError.message}`);
+    const normalizedInsightPlatform = String(schedule.platform).toLowerCase();
+    const insightPostType = normalizedInsightPlatform === "instagram"
+      ? String(schedule.post_type).toLowerCase()
+      : normalizedInsightPlatform;
+    const insightPublishReference = published.sentAt ?? published.dueAt ?? new Date().toISOString();
+    const { error: insightError } = await sb.from("formula_run_insights").upsert({
+      run_id: run.id,
+      recurring_schedule_id: schedule.id,
+      buffer_post_id: published.postId,
+      post_type: insightPostType,
+      metrics: [],
+      sync_status: "pending",
+      sync_attempts: 0,
+      next_sync_due_at: insightPostType === "story" ? formulaStoryFirstSyncDueAt(insightPublishReference) : null,
+      last_error: null,
+    }, { onConflict: "run_id" });
+    if (insightError) throw new Error(`formula insight history: ${insightError.message}`);
     const finish = new Date().toISOString();
     await sb.from("runs").update({ status: "complete", current_step: "complete", finished_at: finish, duration_ms: Date.now() - startedAt, heartbeat_at: finish, step_state: { recurring_schedule_id: schedule.id, slot_key: slotKey, step: "complete", buffer_post_id: published.postId } }).eq("id", run.id);
     await sb.from("recurring_schedules").update({

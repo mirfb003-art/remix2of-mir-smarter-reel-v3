@@ -1,4 +1,18 @@
 // Buffer GraphQL client (server-only). Uses the user's API token & endpoint.
+export interface BufferPostMetric {
+  type: string;
+  name: string;
+  value: number;
+  unit: string;
+}
+
+export interface BufferPostMetricsSnapshot {
+  postId: string;
+  metricsUpdatedAt: string | null;
+  metrics: BufferPostMetric[];
+  raw: unknown;
+}
+
 export interface BufferPostMetrics {
   id: string;
   text: string | null;
@@ -42,6 +56,7 @@ export interface BufferClient {
     };
   }): Promise<BufferPostProof>;
   getPost(id: string): Promise<{ analytics: Record<string, number>; raw: any } | null>;
+  getPostMetrics(id: string): Promise<BufferPostMetricsSnapshot | null>;
   getPostProof(id: string): Promise<BufferPostProof | null>;
   getChannelPostsMetrics(channelId: string, limit?: number): Promise<BufferPostMetrics[]>;
 }
@@ -254,6 +269,26 @@ export function makeBufferClient(token: string, endpoint: string): BufferClient 
     },
 
     getPostProof,
+
+    async getPostMetrics(id) {
+      const d = await gql<{ post: any }>(
+        `query PostMetrics($id: PostId!) { post(input: { id: $id }) { id metrics { type name value unit } metricsUpdatedAt } }`,
+        { id },
+      );
+      const post = d?.post;
+      if (!post?.id) return null;
+      return {
+        postId: post.id,
+        metricsUpdatedAt: post.metricsUpdatedAt ?? null,
+        metrics: (post.metrics ?? []).map((metric: any) => ({
+          type: String(metric.type ?? ""),
+          name: String(metric.name ?? metric.type ?? "Metric"),
+          value: Number(metric.value ?? 0),
+          unit: String(metric.unit ?? "count"),
+        })),
+        raw: post,
+      };
+    },
 
     async getPost(id) {
       try {

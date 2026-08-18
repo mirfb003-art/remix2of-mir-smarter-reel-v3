@@ -75,11 +75,13 @@ export const Route = createFileRoute("/api/public/cron/tick")({
             formulaResults.push({ id: schedule.id, ok: false, error: e instanceof Error ? e.message : String(e) });
           }
         }
+        const { runDueFormulaStoryInsights } = await import("@/lib/formula-insights.server");
+        const formulaInsightResults = await runDueFormulaStoryInsights(supabaseAdmin as any);
         const { runDueMultiChannelSchedules } = await import("@/lib/multi-channel.server");
         const multiChannelResults = await runDueMultiChannelSchedules(supabaseAdmin as any);
         const { runDueSheetModeSheets } = await import("@/lib/sheet-mode.server");
         const sheetModeResults = await runDueSheetModeSheets(supabaseAdmin as any);
-        return Response.json({ processed: results.length + formulaResults.length + multiChannelResults.length + sheetModeResults.length, results, formulaResults, multiChannelResults, sheetModeResults });
+        return Response.json({ processed: results.length + formulaResults.length + formulaInsightResults.length + multiChannelResults.length + sheetModeResults.length, results, formulaResults, formulaInsightResults, multiChannelResults, sheetModeResults });
       },
     },
   },
