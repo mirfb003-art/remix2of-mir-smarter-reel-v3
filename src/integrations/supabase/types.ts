@@ -1214,9 +1214,6 @@ export type Database = {
           id: string
           interval_hours: number
           is_active: boolean
-          custom_schedule_at: string | null
-          custom_schedule_offset_minutes: number | null
-          publish_mode: string
           last_claimed_slot: string | null
           last_error: string | null
           last_published_item_id: string | null
@@ -1250,9 +1247,6 @@ export type Database = {
           id?: string
           interval_hours: number
           is_active?: boolean
-          custom_schedule_at?: string | null
-          custom_schedule_offset_minutes?: number | null
-          publish_mode?: string
           last_claimed_slot?: string | null
           last_error?: string | null
           last_published_item_id?: string | null
@@ -1286,9 +1280,6 @@ export type Database = {
           id?: string
           interval_hours?: number
           is_active?: boolean
-          custom_schedule_at?: string | null
-          custom_schedule_offset_minutes?: number | null
-          publish_mode?: string
           last_claimed_slot?: string | null
           last_error?: string | null
           last_published_item_id?: string | null
