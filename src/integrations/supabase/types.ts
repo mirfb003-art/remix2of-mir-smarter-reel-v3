@@ -1210,13 +1210,12 @@ export type Database = {
           cloudinary_transform_enabled: boolean
           cloudinary_transform_mode: string
           created_at: string
+          custom_schedule_at: string | null
+          custom_schedule_offset_minutes: number | null
           daily_times: Json
           id: string
           interval_hours: number
           is_active: boolean
-          custom_schedule_at: string | null
-          custom_schedule_offset_minutes: number | null
-          publish_mode: string
           last_claimed_slot: string | null
           last_error: string | null
           last_published_item_id: string | null
@@ -1228,6 +1227,7 @@ export type Database = {
           platform: string
           post_type: string
           privacy_level: string | null
+          publish_mode: string
           scheduler_mode: string
           share_to_feed: boolean
           start_at: string | null
@@ -1246,13 +1246,12 @@ export type Database = {
           cloudinary_transform_enabled?: boolean
           cloudinary_transform_mode?: string
           created_at?: string
+          custom_schedule_at?: string | null
+          custom_schedule_offset_minutes?: number | null
           daily_times?: Json
           id?: string
           interval_hours: number
           is_active?: boolean
-          custom_schedule_at?: string | null
-          custom_schedule_offset_minutes?: number | null
-          publish_mode?: string
           last_claimed_slot?: string | null
           last_error?: string | null
           last_published_item_id?: string | null
@@ -1264,6 +1263,7 @@ export type Database = {
           platform: string
           post_type: string
           privacy_level?: string | null
+          publish_mode?: string
           scheduler_mode?: string
           share_to_feed?: boolean
           start_at?: string | null
@@ -1282,13 +1282,12 @@ export type Database = {
           cloudinary_transform_enabled?: boolean
           cloudinary_transform_mode?: string
           created_at?: string
+          custom_schedule_at?: string | null
+          custom_schedule_offset_minutes?: number | null
           daily_times?: Json
           id?: string
           interval_hours?: number
           is_active?: boolean
-          custom_schedule_at?: string | null
-          custom_schedule_offset_minutes?: number | null
-          publish_mode?: string
           last_claimed_slot?: string | null
           last_error?: string | null
           last_published_item_id?: string | null
@@ -1300,6 +1299,7 @@ export type Database = {
           platform?: string
           post_type?: string
           privacy_level?: string | null
+          publish_mode?: string
           scheduler_mode?: string
           share_to_feed?: boolean
           start_at?: string | null
