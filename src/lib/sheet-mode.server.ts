@@ -527,6 +527,8 @@ export async function runDueSheetModeSheets(sb: Sb) {
     .eq("is_enabled", true)
     .neq("scheduler_mode", "manual")
     .lte("next_run_at", now.toISOString())
+    .order("next_run_at", { ascending: true })
+    .order("id", { ascending: true })
     .limit(50);
   if (error) throw new Error(error.message);
   const results: unknown[] = [];

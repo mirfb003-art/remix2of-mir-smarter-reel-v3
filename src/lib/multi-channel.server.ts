@@ -119,7 +119,13 @@ export async function runMultiChannelRound(sb: Sb, userId: string, campaignId: s
 }
 
 export async function runDueMultiChannelSchedules(sb: Sb) {
-  const { data: schedules } = await sb.from("multi_channel_schedules").select("id,user_id,campaign_id,interval_hours,next_run_at").eq("is_active", true).lte("next_run_at", new Date().toISOString()).limit(20);
+  const { data: schedules } = await sb.from("multi_channel_schedules")
+    .select("id,user_id,campaign_id,interval_hours,next_run_at")
+    .eq("is_active", true)
+    .lte("next_run_at", new Date().toISOString())
+    .order("next_run_at", { ascending: true })
+    .order("id", { ascending: true })
+    .limit(20);
   const results: unknown[] = [];
   for (const schedule of schedules ?? []) {
     const now = new Date();
